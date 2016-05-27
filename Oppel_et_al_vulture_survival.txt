@@ -1,9 +1,7 @@
 ##########################################################################
 # SUPPLEMENTARY MATERIAL TO:
-# Oppel, S., Dobrev, V., Arkumarev, V., Saravia, V., Bounas, A., Kret, E., Skartsi, T., Velevski, M., Stoychev, S., and Nikolov, S. C. (2016)
-# Assessing the effectiveness of intensive conservation actions: Does guarding and feeding increase productivity and survival of
-# Egyptian Vultures in the Balkans?
-# Biological Conservation
+# Oppel, S., Dobrev, V., Arkumarev, V., Saravia, V., Bounas, A., Kret, E., Skartsi, T., Velevski, M., Stoychev, S., and Nikolov, S. C. 2016. Assessing the effectiveness of intensive conservation actions: Does guarding and feeding increase productivity and survival of Egyptian Vultures in the Balkans? Biol. Conserv. 198: 157-164.
+# available at http://lifeneophron.eu/files/docs/1462949729_660.pdf
 # code adapted from Kery and Schaub 2012; idea from Roth and Amrhein 2010
 # Bayesian model selection adapted from Tenan et al. 2014
 # modified by steffen.oppel@rspb.org.uk in March 2016
