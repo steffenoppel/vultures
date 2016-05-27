@@ -1,0 +1,215 @@
+##########################################################################
+# SUPPLEMENTARY MATERIAL TO:
+# Oppel, S., Dobrev, V., Arkumarev, V., Saravia, V., Bounas, A., Kret, E., Skartsi, T., Velevski, M., Stoychev, S., and Nikolov, S. C. (2016)
+# Assessing the effectiveness of intensive conservation actions: Does guarding and feeding increase productivity and survival of
+# Egyptian Vultures in the Balkans?
+# Biological Conservation
+# code adapted from Kery and Schaub 2012; idea from Roth and Amrhein 2010
+# Bayesian model selection adapted from Tenan et al. 2014
+# modified by steffen.oppel@rspb.org.uk in March 2016
+##########################################################################
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# DATA REQUIREMENTS AND DATA STRUCTURE
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+# DATA ARE STRUCTURED AS FOLLOWS:
+
+# y [357,7,23]
+# array of observations of number of adult birds (0,1, or 2) over territory-years [rows], days (=repeat visits, or secondary occasions) [columns], and weeks # (=primary occasions) [list elements]
+
+# gdays [357]
+# vector with the (standardized) number of guarding days for each territory-year (357)
+
+# obseff [357,7,23]
+# array with the same dimensions as 'y' containing standardized observation effort (daily number of hours of survey effort)
+
+# rest [357]
+# vector indicating whether each territory-year (357) was within 10 km of an operating vulture restaurant (1/0)
+
+# feedamt [357]
+# vector with the (standardized) amount of supplementary food provided for each territory-year (357)
+
+# z [357,23]
+# matrix with initial number of birds in each territory-Year [rows, 357] and primary period [columns, 23]
+
+# terrnum [357]
+# vector with the unique identity of a physical territory provided for each territory-year (357)
+
+# terrnum [357]
+# vector with the unique identity (1-78) of a physical territory provided for each territory-year (357)
+
+# yearnum [357]
+# vector with the unique number (1-10) of a study year (2006-2015) provided for each territory-year (357)
+
+# mu.beta.feed, tau.beta.feed, mu.beta.guard, tau.beta.guard, mu.beta.rest, tau.beta.rest
+# priors for the three management parameters (single values derived from preliminary model runs
+
+# nmodels
+# number of unique combinations of the three management parameters (= number of possible models, 8)
+
+
+full.data <- list(y = y, nsite = dim(y)[1], nrep = dim(y)[2], nyear = dim(y)[3], gdays=gdays, eff=obseff, restaur=rest, feeddays=feedamt, psi1=z[,1],terrnum=terrnum, yearnum=yearnum, mu.beta.feed = mu.beta.feed, tau.beta.feed = tau.beta.feed, mu.beta.guard = mu.beta.guard, tau.beta.guard = tau.beta.guard, mu.beta.rest = mu.beta.rest, tau.beta.rest = tau.beta.rest, nmodels = 2^3)
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# MODEL SPECIFICATION IN BUGS LANGUAGE
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+sink("Unmarked_survival_mgmt.jags")
+cat("
+model {
+
+
+
+# PRIORS THAT VARY BETWEEN MODELS
+
+# Priors for survival and occupancy
+# GVS priors for beta
+beta.mean.feed <- (1-g[1]) * mu.beta.feed
+beta.tau.feed <- (1-g[1]) * tau.beta.feed + g[1] * 0.001
+beta.feed~ dnorm(beta.mean.feed, beta.tau.feed)
+
+beta.mean.rest <- (1-g[2]) * mu.beta.rest
+beta.tau.rest <- (1-g[2]) * tau.beta.rest + g[2] * 0.001
+beta.rest~ dnorm(beta.mean.rest, beta.tau.rest)
+
+beta.mean.guard <- (1-g[3]) * mu.beta.guard
+beta.tau.guard <- (1-g[3]) * tau.beta.guard + g[3] * 0.001
+beta.guard~ dnorm(beta.mean.guard, beta.tau.guard)
+
+lm.phi ~ dnorm(0, 0.0001)				## weekly survival must be greater than 80%
+
+
+# Priors for variable indicators
+g[1] ~ dbern(0.5)
+g[2] ~ dbern(0.5)
+g[3] ~ dbern(0.5)
+
+
+
+
+# PRIORS THAT ARE THE SAME FOR ALL MODELS
+
+# Priors for detection probability
+# Det prob varies for each 'site' (=territory-year-bird)
+for (k in 1:nyear){
+lmu.p[k] ~ dunif(0.5, 0.731)				## det prob on logit scale, around 0.35 - 0.9 on normal scale
+}							## close k loop for det prob prior
+
+# Det prob relationship with observation effort
+beta.grd.day ~ dnorm(0, 0.0001)
+beta.obs.eff ~ dnorm(0, 0.0001)
+
+
+# RANDOM EFFECTS FOR TERRITORY AND YEAR
+for (t in 1:78){				      ## data available from 78 different territories
+   rand.site[t] ~ dnorm(0, tau.site)                  ## random effect for each territory
+   }
+tau.site <- 1 / (sd.site * sd.site)
+sd.site ~ dunif(0, 3)
+
+for (yr in 1:10){					## data available from 10 project years
+   rand.year[yr] ~ dnorm(0, tau.year)                 	## random effect for each project year
+   }
+tau.year <- 1 / (sd.year * sd.year)
+sd.year ~ dunif(0, 5)
+
+
+
+
+###### ECOLOGICAL STATE MODELS WITH EFFECT OF MANAGEMENT ON SURVIVAL
+
+
+for (i in 1:nsite){
+
+z[i,1] ~ dbin(1,psi1[i])
+
+linphi[i] <-lm.phi + g[1]*beta.feed*feeddays[i] + g[3]*beta.guard*gdays[i]  + g[2]*beta.rest*restaur[i] + rand.site[terrnum[i]]+ rand.year[yearnum[i]] 
+
+phi[i] <- 1 / (1 + exp(-linphi[i]))
+
+
+
+for (k in 2:nyear){
+      z[i,k] ~ dbin(phi[i],z[i,k-1])			
+      } 						# close k loop over primary period
+  } 							# close i loop over sites
+
+
+
+# OBSERVATION MODEL WITH EFFECT OF BIRD, OBSERVATION EFFORT AND NUMBER OF GUARD DAYS
+for (i in 1:nsite){
+   for (j in 1:nrep){
+      for (k in 1:nyear){
+   	linpred[i,j,k] <- lmu.p[k]+beta.grd.day*gdays[i]+beta.obs.eff*eff[i,j,k]	## observation prob depends on guard effort and number of visits
+	p[i,j,k] <- 1 / (1 + exp(-linpred[i,j,k]))
+        y[i,j,k] ~ dbin(p[i,j,k], z[i,k])		
+
+
+       } 						# close k loop over primary period
+      } 						# close j loop over secondary period
+  } 							# close i loop over sites
+
+
+# DERIVED PARAMETERS FOR OUTPUT
+
+# Number of birds alive in each week
+n.alive[1]<-sum(z[1:nsite,1])
+for (k in 2:nyear){
+   n.alive[k] <- sum(z[1:nsite,k])
+       } 						# close k loop over primary period
+
+# Detection probability averaged across all sites and occasions
+mean.p <-mean(p[,,])
+
+# Survival probability averaged across season
+season.surv<-pow(mean.surv,23)
+mean.surv<-mean(phi)
+
+## Model SELECTION
+mdl <- 1 + g[1] * 1 + g[2] * 2 + g[3] * 3 			
+
+## Vector with model indicators
+for (j in 1:nmodels) {
+	pmdl[j] <- equals(mdl, j)
+}
+
+
+}							## close loop of model statement
+
+
+",fill = TRUE)
+sink()
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# MODEL RUN
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+library(jagsUI)
+
+
+full.params <- c("lm.phi", "beta.feed",  "beta.guard", "beta.rest", "beta.grd.day", "beta.obs.eff", "season.surv","mean.surv","mean.p","g", "pmdl")		
+inits <- function(){list(z = zst,  g = rbinom(3,1,0.5))}
+
+# MCMC settings
+ni <- 45000
+nt <- 1
+nb <- 5000
+nc <- 8
+
+
+# RUN MODEL WITH MODEL SELECTION (~45 min)
+out <- jags(full.data, inits, full.params, "Unmarked_survival_mgmt.jags", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel=T, n.cores=8)
+
+
+print(super.out, dig = 5)
