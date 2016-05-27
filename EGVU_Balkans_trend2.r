@@ -1,6 +1,8 @@
 #####################################################################################################
 ##### EGYPTIAN VULTURE POPULATION TREND IN BALKAN COUNTRIES #################
 #####################################################################################################
+## Velevski, M., Nikolov, S. C., Hallmann, B., Dobrev, V., Sidiropoulos, L., Saravia, V., Tsiakiris, R., Arkumarev, V., Galanaki, A., Kominos, T., Stara, K., Kret, E., Grubač, B., Lisičanec, E., Kastritis, T., Vavylis, D., Topi, M., Hoxha, B. & Oppel, S. 2015. Population decline and range contraction of the Egyptian Vulture Neophron percnopterus on the Balkan Peninsula. Bird Conservation International, 25(4): 440-450.
+## article available at http://lifeneophron.eu/files/docs/1449818562_7.pdf
 ## SSM model based on Kery and Schaub 2012, Ch 5
 ## modified 31 January 2014 to include two separate trend estimates - from 2003-2013 (better data) and for longest time series
 ## modified 20 May 2014 to include loop over all 3 countries in one model
