@@ -1,5 +1,7 @@
 ##########################################################################
 # MIGRATION DATA FOR EGYPTIAN VULTURES
+# Oppel, S., Dobrev, V., Arkumarev, V., Saravia, V., Bounas, A., Kret, E., Velevski, M., Stoychev, S. & Nikolov, S.C. 2015. High juvenile mortality during migration in a declining population of a long-distance migratory raptor. Ibis, 157(3): 545-557.
+# paper available at http://lifeneophron.eu/files/docs/1455988483_251.pdf
 # original script written by Steffen Oppel
 # August 2013
 # last modification 5 July 2014: switched from Transmitter_ID to Bird_ID as identifier, because one transmitter was used on two separate birds in 2010 and 2011
