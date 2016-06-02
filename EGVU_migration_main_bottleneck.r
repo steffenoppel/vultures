@@ -106,7 +106,7 @@ plot(countriesLow, add=T)
 
 
 ### CREATE A GRID AND COUNT NUMBER OF LOCATIONS IN EACH GRID CELL ###
-grd<-makeGridTopology(EV_spring_trips, cellsize = c(100,100), adjust2longlat = TRUE)
+grd<-makeGridTopology(EV_spring_trips, cellsize = c(100,100), adjust2longlat = TRUE)			### CREATE THIS USING all_migdata!
 trg <- tripGrid(EV_spring_trips, grid=grd,method="pixellate")						### this will provide the number of bird seconds spent in each grid cell
 spplot(trg)			## plots the trips with a legend
 #image(trg)
@@ -268,7 +268,8 @@ lines(EV_autumn_trips)
 plot(countriesLow, add=T)
 
 ### CREATE A GRID AND COUNT NUMBER OF LOCATIONS IN EACH GRID CELL ###
-grd<-makeGridTopology(EV_autumn_trips, cellsize = c(100,100), adjust2longlat = TRUE)
+### INSTEAD OF CREATING A NEW GRID, USE THE SAME AS FOR SPRING MIGRATION
+#grd<-makeGridTopology(EV_autumn_trips, cellsize = c(100,100), adjust2longlat = TRUE)
 trg <- tripGrid(EV_autumn_trips, grid=grd,method="pixellate")						### this will provide the number of bird seconds spent in each grid cell
 spplot(trg)			## plots the trips with a legend
 #image(trg)
