@@ -385,9 +385,23 @@ ggmap(MAP)+geom_tile(data=autumn_bottleneck_plot, aes(x=long,y=lat, fill = n_mig
 autumn<-autumn_bottleneck_plot[autumn_bottleneck_plot$n_mig>50,]
 spring<-spring_bottleneck_plot[spring_bottleneck_plot$n_mig>50,]
 
+#### QUANTITATIVE INDEX FOR ALL CELLS ####
+all_botts<-merge(autumn_bottleneck_plot, spring_bottleneck_plot, by=c("lat","long"), all=T)
+names(all_botts)[4]<-"n_mig_autumn"	#autumn						### Rename the columns 4 and 6
+names(all_botts)[6]<-"n_mig_spring"	#spring
+all_botts$index<-(all_botts$n_mig_autumn*13+all_botts$n_mig_spring*9)/(13+9)
+all_botts$rank<-rank(-all_botts$index, ties.method = "min")	
+
 ## combine the >50% migrations in both seasons
-### THIS DOES NOT WORK BECAUSE THE GRIDS DO NOT MATCH - see lines 109 and 271 - you need to make 1 grid, 1 spdf etc. to use in both spring and autumn so that you can overlay them
-main_bottlenecks_plot<-merge(autumn, spring, by=c('lat','long'), all=T)
+fifty_aut<-autumn_bottleneck_plot[autumn_bottleneck_plot$n_mig>50,]			### Select the cells with >50% of migrations in autumn, then in spring
+fifty_spr<-spring_bottleneck_plot[spring_bottleneck_plot$n_mig>50,]
+fifty<-merge(fifty_aut, fifty_spr, by=c("lat","long"), all=T)
+names(fifty)[4]<-"n_mig_autumn"	#autumn						### Rename the columns 4 and 6
+names(fifty)[6]<-"n_mig_spring"	#spring
+names(fifty)
+main_bottlenecks_plot<-fifty[!(is.na(fifty$n_mig_autumn)),]				### remove the lines that have no autumn mig info (i.e. those with <50% in autumn)
+main_bottlenecks_plot<-main_bottlenecks_plot[!(is.na(main_bottlenecks_plot$n_mig_spring)),]				### remove the lines that have no spring mig info (i.e. those with <50% in spring)
+main_bottlenecks_plot
 
 ggmap(MAP)+geom_tile(data=main_bottlenecks_plot, aes(x=long,y=lat, fill = n_mig)) +
 	scale_fill_gradient(name = '% of all autumn migrations', low="white", high="red", na.value = 'white', guide = "colourbar", limits=c(25, 75))+ 
