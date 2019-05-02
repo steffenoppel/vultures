@@ -1,0 +1,298 @@
+
+model {
+#-------------------------------------------------
+# integrated population model for the balkan population
+# - age structured model with 6 age classes: 
+# - age-specific probability to recruit at ages 4 or 5
+# - age-specific survival derived from tracking data
+# - adult survival based on territory occupancy
+# - pre breeding census, female-based assuming equal sex ratio & survival
+# - productivity supplemented by captive-bred juveniles (0-10 per year)
+#-------------------------------------------------
+
+
+#-------------------------------------------------  
+# 1. PRIORS FOR ALL DATA SETS
+#-------------------------------------------------
+
+# Priors and constraints FOR FECUNDITY
+    mu.fec ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
+    
+
+# Priors and constraints FOR POPULATION COUNTS OBSERVATION
+    sigma.obs.count ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
+    tau.obs.count<-pow(sigma.obs.count,-2)
+
+
+# Priors and constraints FOR JUVENILE SURVIVAL FROM TELEMETRY
+    for (iptel in 1:nind.telemetry){
+      for (tptel in f.telemetry[iptel]:(n.occasions.telemetry-1)){
+        phi.telemetry[iptel,tptel] <- beta.telemetry[x.telemetry[iptel,tptel]]
+        p.telemetry[iptel,tptel] <- mean.p.telemetry
+      } #tptel
+    } #iptel
+
+    for (utel in 1:3){					## change to 3 if > 2 years are modelled
+      beta.telemetry[utel] ~ dunif(0, 1)              # Priors for age-specific survival
+    }
+    mean.p.telemetry ~ dunif(0.95, 1)                  # Prior for mean resighting (very high, only when tag malfunctions)
+
+
+
+# Priors and constraints FOR ADULT SURVIVAL FROM TERRITORY MONITORING
+    
+    ## Priors for detection probability
+    # Det prob varies for each site, det prob on logit scale, around 0.05 - 0.95 on normal scale
+    for (ipterr in 1:nsite.terrvis){
+      lmu.p.terrvis[ipterr] ~ dunif(-3, 2)				
+    }							                        ## close k loop for det prob prior
+    
+    # Det prob relationship with observation effort
+    beta.obs.eff.terrvis ~ dnorm(0, 0.0001)
+    
+    
+    # Priors for survival for breeding and non-breeding season varies among years
+    ## monthly BREEDING SEASON survival must be greater than 88% on logit scale
+    ## monthly NON-BREEDING SEASON survival must be greater than 88% on logit scale
+
+    for (nypterr in 1:nyears.terrvis){
+      lm.phi.terrvis[1,nypterr] ~ dunif(2, 5)				      
+      lm.phi.terrvis[2,nypterr] ~ dunif(2, 5)    
+    }    
+    
+
+    ### RANDOM OBSERVATION EFFECT FOR EACH TERRITORY AND YEAR
+
+    for (nyRpterr in 1:nyears.terrvis){
+      rand.obs.terrvis[nyRpterr] ~ dnorm(0, tau.obs.terrvis)
+    }
+    
+    tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)
+    sd.obs.terrvis ~ dunif(0, 3)
+    
+
+    ### RANDOM SURVIVAL EFFECT FOR EACH TERRITORY AND YEAR
+
+    for (ipterr2 in 1:nsite.terrvis){
+      rand.surv.terrvis[ipterr2] ~ dnorm(0, tau.surv.terrvis)
+    }
+    tau.surv.terrvis <- 1 / (sd.surv.terrvis * sd.surv.terrvis)
+    sd.surv.terrvis ~ dunif(0, 3)
+    
+
+# Priors for population process and immigration
+  
+    # Initial population sizes for first year of monitoring
+    JUV[1] ~ dunif(50, 70)
+    N1[1] ~ dunif(15, 35)
+    N2[1] ~ dunif(10, 32)
+    N3[1] ~ dunif(5, 20)
+    N4[1] ~ dunif(5, 17)
+    N5[1] ~ dunif(5, 15)
+    N6[1] ~ dunif(100, 140)
+
+
+#-------------------------------------------------  
+# 2. LIKELIHOODS AND ECOLOGICAL STATE MODEL
+#-------------------------------------------------
+    
+# -------------------------------------------------        
+# 2.1. System process: female based matrix model
+# -------------------------------------------------
+    
+for (tt in 2:T.count){
+
+    nestlings[tt] <- mu.fec * 0.5 * Nterr[tt]                                                              ### number of local recruits
+    JUV[tt] ~ dpois(nestlings[tt])                                                              ### need a discrete number otherwise dbin will fail
+    N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(JUV[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
+    N2[tt] ~ dbin(ann.phi.sec.telemetry, round(N1[tt-1]))                                                      ### number of 2-year old survivors
+    N3[tt] ~ dbin(ann.phi.third.telemetry, round(N2[tt-1]))                                                    ### number of 3-year old survivors
+    N4[tt] ~ dbin(ann.surv.terrvis[tt], round(N3[tt-1]))                                                       ### number of 4-year old survivors
+    N5[tt] ~ dbin(ann.surv.terrvis[tt], round(N4[tt-1]))                                                       ### number of 5-year old survivors
+    N6[tt] ~ dbin(ann.surv.terrvis[tt], round((N5[tt-1]+N6[tt-1])))                                             ### number of 6-year or older (adult) birds
+
+} # tt
+    
+
+
+# -------------------------------------------------        
+# 2.2. Observation process for population counts: state-space model of annual counts
+# -------------------------------------------------
+
+    for (tlc in 1:T.count){
+      Nterr[tlc] <- N4[tlc] * 0.024 + N5[tlc] * 0.124 + N6[tlc]                                    ### number of observable territorial birds
+      y.count[tlc] ~ dnorm(Nterr[tlc], tau.obs.count)								# Distribution for random error in observed numbers (counts)
+    #}
+
+
+# -------------------------------------------------        
+# 2.3. Likelihood for fecundity: Poisson regression from the number of surveyed broods
+# -------------------------------------------------
+    #for (t in 1:nyear.fec){
+      J.fec[tlc] ~ dpois(rho.fec[tlc])
+      rho.fec[tlc] <- R.fec[tlc]*mu.fec
+    } #	close loop over every year in which we have count and fecundity data
+
+
+
+# -------------------------------------------------        
+# 2.4. Likelihood for juvenile survival from telemetry
+# -------------------------------------------------
+ 
+  for (iltel in 1:nind.telemetry){
+
+    # Define latent state at first capture
+      z.telemetry[iltel,f.telemetry[iltel]] <- 1
+
+    for (tltel in (f.telemetry[iltel]+1):n.occasions.telemetry){
+
+    # State process
+      z.telemetry[iltel,tltel] ~ dbern(mu1.telemetry[iltel,tltel])
+      mu1.telemetry[iltel,tltel] <- phi.telemetry[iltel,tltel-1] * z.telemetry[iltel,tltel-1]
+
+    # Observation process
+      y.telemetry[iltel,tltel] ~ dbern(mu2.telemetry[iltel,tltel])
+      mu2.telemetry[iltel,tltel] <- p.telemetry[iltel,tltel-1] * z.telemetry[iltel,tltel]
+
+    } #tltel
+  } #iltel
+
+
+# -------------------------------------------------        
+# 2.5. Likelihood for adult survival from territory monitoring
+# -------------------------------------------------
+
+    ### ECOLOGICAL STATE MODEL WITH ESTIMATE OF SURVIVAL
+
+    for (ilterr in 1:nsite.terrvis){
+        z.terrvis[ilterr,1] ~ dbin(1,psi1.terrvis[ilterr])
+        phi.terrvis[ilterr,1] <- 1
+        surv.terrvis[ilterr,1] <- 1
+        linphi.terrvis[ilterr,1] <- 0
+    
+      for (klterr in 2:nprim.terrvis){
+        linphi.terrvis[ilterr,klterr] <-lm.phi.terrvis[parm.terrvis[klterr-1],year.terrvis[klterr]] + rand.surv.terrvis[ilterr] 
+        phi.terrvis[ilterr,klterr] <- 1 / (1 + exp(-linphi.terrvis[ilterr,klterr]))
+        surv.terrvis[ilterr,klterr] <- pow(phi.terrvis[ilterr,klterr],intv.terrvis[klterr-1])
+        z.terrvis[ilterr,klterr] ~ dbin(phi.terrvis[ilterr,klterr],z.terrvis[ilterr,klterr-1])
+      } 						# close klterr loop over primary period  - years
+    } 							# close ilterr loop over sites
+    
+    ### OBSERVATION MODEL WITH RANDOM EFFECT OF YEAR
+    ## observation prob depends on number of visits per week
+
+    for (iobs in 1:nsite.terrvis){
+      for (jobs in 1:nrep.terrvis){
+        for (kobs in 1:nprim.terrvis){
+
+          linpred.terrvis[iobs,jobs,kobs] <- lmu.p.terrvis[iobs]+beta.obs.eff.terrvis*eff.terrvis[iobs,jobs,kobs] + rand.obs.terrvis[year.terrvis[kobs]]
+          p.terrvis[iobs,jobs,kobs] <- 1 / (1 + exp(-linpred.terrvis[iobs,jobs,kobs]))
+          y.terrvis[iobs,jobs,kobs] ~ dbin(p.terrvis[iobs,jobs,kobs], z.terrvis[iobs,kobs])
+    
+    
+        } 						# close kobs loop over primary periods
+      } 						 # close jobs loop over week visits
+    } 							# close iobs loop over sites
+    
+
+
+# -------------------------------------------------        
+# 3. DERIVED PARAMETERS
+# -------------------------------------------------
+
+### 3.1 TELEMETRY DERIVED SURVIVAL ESTIMATES
+
+  ann.phi.juv.telemetry<-pow(beta.telemetry[1],3)*pow(beta.telemetry[2],9)						### adjust here if first year consists of two parameters
+  ann.phi.sec.telemetry<-pow(beta.telemetry[2],12)
+  ann.phi.third.telemetry<-pow(beta.telemetry[3],12)
+
+
+### 3.2 TERRITORY MONITORING DERIVED SURVIVAL AND RESIGHTING ESTIMATES
+
+    # Detection probability averaged across all sites and occasions
+    mean.p.terrvis <-mean(p.terrvis[,,])
+    
+    # Survival probability averaged across season and year
+    for (nys in 1:nyears.terrvis){
+      breed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[1,nys]))
+      nonbreed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[2,nys]))
+      ann.surv.terrvis[nys]<-pow(breed.surv.terrvis[nys],4)*pow(nonbreed.surv.terrvis[nys],7)
+    }
+
+### 3.3 POPULATION GROWTH DERIVED FROM COUNTS    
+
+    # Annual population growth rate
+    for (ipop in 1:(T.count-1)){
+      lambda.t[ipop] <- Nterr[ipop+1] / max(Nterr[ipop],1)           ### inserted max of 1 to avoid this becoming an invalid parent error
+      loglambda.t[ipop]<-log(lambda.t[ipop])## for calculating geometric mean of overall population growth rate
+    }
+    
+    #### OVERALL POPULATION GROWTH RATE  #########
+    mean.lambda<-exp((1/(T.count-1))*sum(loglambda.t[1:(T.count-1)]))   # Geometric mean
+
+
+
+
+# -------------------------------------------------        
+# 4. PREDICTION INTO THE FUTURE
+# -------------------------------------------------
+### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
+### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
+
+
+
+    # CAPTIVE RELEASE OF JUVENILE BIRDS
+    for (ncr in 1:scen.capt.release){
+      # CAPT.ADD ~ dunif(4,6)   ## changed from 0-15
+
+      # SPECIFY IMPROVEMENT OF SURVIVAL
+      for (is in 1:scen.imp.surv){ 
+    
+        # improve.surv ~ dunif(1,1.10)
+        fut.survival[ncr,is] <-imp.surv[is]*mean(ann.surv.terrvis[1:nyears.terrvis])
+
+        ## POPULATION PROCESS
+        ### DOES NOT WORK WITH SAME ARRAY OF POP TRAJECTORY AS 3 dimensions required
+        ## need to copy previous array elements
+        JUV.f[ncr,is,1] <- JUV[T.count]
+        N1.f[ncr,is,1] <- N1[T.count]
+        N2.f[ncr,is,1] <- N2[T.count]
+        N3.f[ncr,is,1] <- N3[T.count]
+        N4.f[ncr,is,1] <- N4[T.count]
+        N5.f[ncr,is,1] <- N5[T.count]
+        N6.f[ncr,is,1] <- N6[T.count]
+        Nterr.f[ncr,is,1] <- Nterr[T.count]
+        rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+
+          for (fut in 2:PROJECTION){
+
+            rescued[ncr,is,fut] ~ dunif(5,9)                                               ### number of chicks rescued and rehabilitated to improve survival 
+            nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut]) ### number of local recruits calculated as fecundity times number of territorial pairs
+            JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])          ### this line merely converts number of nestlings into a discrete number to prevent downstream errors MINUS RESCUED CHICKS
+
+            N1.f[ncr,is,fut] <- (imp.surv[is]*ann.phi.juv.telemetry*(JUV.f[ncr,is,fut-1]- rescued[ncr,is,fut]))+(imp.surv[is]*ann.phi.sec.telemetry*(capt.release[ncr]+rescued[ncr,is,fut]))                     ### number of 1-year old survivors - add CAPT.ADD and rescued chicks with higher survival due to delayed release
+            N2.f[ncr,is,fut] <- imp.surv[is]*ann.phi.sec.telemetry*N1.f[ncr,is,fut-1]                                                      ### number of 2-year old survivors
+            N3.f[ncr,is,fut] <- imp.surv[is]*ann.phi.third.telemetry*N2.f[ncr,is,fut-1]                                                    ### number of 3-year old survivors
+
+            N4.f[ncr,is,fut] <- fut.survival[ncr,is]*N3.f[ncr,is,fut-1]                                                       ### number of 4-year old survivors
+            N5.f[ncr,is,fut] <- fut.survival[ncr,is]*N4.f[ncr,is,fut-1]                                                       ### number of 5-year old survivors
+            N6.f[ncr,is,fut] <- fut.survival[ncr,is]* (N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])                                   ### number of 6-year or older (adult) birds
+            Nterr.f[ncr,is,fut] <- N4.f[ncr,is,fut] * 0.024 + N5.f[ncr,is,fut] * 0.124 + N6.f[ncr,is,fut]
+          } # fut
+
+          #for (fut2 in (T.count+1):(T.count+PROJECTION-1)){
+          for (fut2 in 1:(PROJECTION-1)){
+            lambda.t.f[ncr,is,fut2] <- Nterr.f[ncr,is,fut2+1] / max(Nterr.f[ncr,is,fut2],1)
+            loglambda.t.f[ncr,is,fut2]<-log(lambda.t.f[ncr,is,fut2])## for calculating geometric mean of overall population growth rate
+          } # fut2
+
+
+          #### FUTURE POPULATION GROWTH RATE  #########
+          fut.lambda[ncr,is]<-exp((1/(PROJECTION-1))*sum(loglambda.t.f[ncr,is,1:(PROJECTION-1)]))   # Geometric mean
+
+      } # end scenario of imp.surv
+
+    } # end scenario of n capt released
+
+} # END of the JAGS model
+
