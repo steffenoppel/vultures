@@ -21,6 +21,8 @@
 # included scenarios for future with n captive released birds and improvement in survival
 
 # update on 1 May 2019: suggestion from Volen to also include 9 'rescued' chicks taken from the wild but rehabilitated and released with higher survival probability
+# update 3 May: future lambda lower than mean lambda - included binomial draws for survival for future projection
+
 
 library(readxl)
 library(jagsUI)
@@ -161,6 +163,9 @@ z.telemetry<-as.matrix(z.telemetry)
 get.first.telemetry<-function(x)min(which(x!=0))
 f.telemetry<-apply(y.telemetry,1,get.first.telemetry)
 
+## for reporting - indicate months of death for juveniles
+get.last.telemetry<-function(x)min(which(x==0))
+hist(apply(y.telemetry,1,get.last.telemetry))
 
 
 #### Bundle data FOR JAGS MODEL RUN and save workspace
@@ -441,7 +446,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_fut_scenarios_with_chickrescue.jags")
+sink("EGVU_IPM_2019_fut_scenarios_binomial.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -527,7 +532,7 @@ model {
 # Priors for population process and immigration
   
     # Initial population sizes for first year of monitoring
-    JUV[1] ~ dunif(50, 70)
+    nestlings[1] ~ dunif(50, 70)   ##changed from JUV
     N1[1] ~ dunif(15, 35)
     N2[1] ~ dunif(10, 32)
     N3[1] ~ dunif(5, 20)
@@ -547,13 +552,13 @@ model {
 for (tt in 2:T.count){
 
     nestlings[tt] <- mu.fec * 0.5 * Nterr[tt]                                                              ### number of local recruits
-    JUV[tt] ~ dpois(nestlings[tt])                                                              ### need a discrete number otherwise dbin will fail
-    N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(JUV[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
+    #JUV[tt] ~ dpois(nestlings[tt])                                                              ### need a discrete number otherwise dbin will fail
+    N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(nestlings[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
     N2[tt] ~ dbin(ann.phi.sec.telemetry, round(N1[tt-1]))                                                      ### number of 2-year old survivors
     N3[tt] ~ dbin(ann.phi.third.telemetry, round(N2[tt-1]))                                                    ### number of 3-year old survivors
     N4[tt] ~ dbin(ann.surv.terrvis[tt], round(N3[tt-1]))                                                       ### number of 4-year old survivors
-    N5[tt] ~ dbin(ann.surv.terrvis[tt], round(N4[tt-1]))                                                       ### number of 5-year old survivors
-    N6[tt] ~ dbin(ann.surv.terrvis[tt], round((N5[tt-1]+N6[tt-1])))                                             ### number of 6-year or older (adult) birds
+    N5[tt] ~ dbin(ann.surv.terrvis[tt], round(N4[tt-1]))                                                ### number of 5-year old survivors
+    N6[tt] ~ dbin(ann.surv.terrvis[tt], round((N5[tt-1]+N6[tt-1])))                                   ### number of 6-year or older (adult) birds
 
 } # tt
     
@@ -693,12 +698,12 @@ for (tt in 2:T.count){
       for (is in 1:scen.imp.surv){ 
     
         # improve.surv ~ dunif(1,1.10)
-        fut.survival[ncr,is] <-imp.surv[is]*mean(ann.surv.terrvis[1:nyears.terrvis])
+        fut.survival[ncr,is] <-min(imp.surv[is]*mean(ann.surv.terrvis[1:nyears.terrvis]),1) ### invalid parent error if survival>1
 
         ## POPULATION PROCESS
         ### DOES NOT WORK WITH SAME ARRAY OF POP TRAJECTORY AS 3 dimensions required
         ## need to copy previous array elements
-        JUV.f[ncr,is,1] <- JUV[T.count]
+        nestlings.f[ncr,is,1] <- round(nestlings[T.count])   ##JUV[T.count]
         N1.f[ncr,is,1] <- N1[T.count]
         N2.f[ncr,is,1] <- N2[T.count]
         N3.f[ncr,is,1] <- N3[T.count]
@@ -706,22 +711,35 @@ for (tt in 2:T.count){
         N5.f[ncr,is,1] <- N5[T.count]
         N6.f[ncr,is,1] <- N6[T.count]
         Nterr.f[ncr,is,1] <- Nterr[T.count]
-        rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+        #rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
 
           for (fut in 2:PROJECTION){
+#             ### deterministic formulation
+#             rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
+#             nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as fecundity times number of territorial pairs
+#             JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])                        ### this line merely converts number of nestlings into a discrete number to prevent downstream errors
+# 
+#             N1.f[ncr,is,fut] <- (imp.surv[is]*ann.phi.juv.telemetry*(JUV.f[ncr,is,fut-1]- rescued[ncr,is,fut]))+(imp.surv[is]*ann.phi.sec.telemetry*(capt.release[ncr]+rescued[ncr,is,fut]))                     ### number of 1-year old survivors - add CAPT.ADD and rescued chicks with higher survival due to delayed release
+#             N2.f[ncr,is,fut] <- imp.surv[is]*ann.phi.sec.telemetry*N1.f[ncr,is,fut-1]                                                      ### number of 2-year old survivors
+#             N3.f[ncr,is,fut] <- imp.surv[is]*ann.phi.third.telemetry*N2.f[ncr,is,fut-1]                                                    ### number of 3-year old survivors
+# 
+#             N4.f[ncr,is,fut] <- fut.survival[ncr,is]*N3.f[ncr,is,fut-1]                                                       ### number of 4-year old survivors
+#             N5.f[ncr,is,fut] <- fut.survival[ncr,is]*N4.f[ncr,is,fut-1]                                                       ### number of 5-year old survivors
+#             N6.f[ncr,is,fut] <- fut.survival[ncr,is]* (N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])                                   ### number of 6-year or older (adult) birds
+#             Nterr.f[ncr,is,fut] <- N4.f[ncr,is,fut] * 0.024 + N5.f[ncr,is,fut] * 0.124 + N6.f[ncr,is,fut]
 
-            rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
+            ### probabilistic formulation
+            #rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
             nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as fecundity times number of territorial pairs
-            JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])                        ### this line merely converts number of nestlings into a discrete number to prevent downstream errors
+            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]))             ### number of 1-year old survivors 
+            N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
+            N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
+            N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
+            N5.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N4.f[ncr,is,fut-1]))                                                       ### number of 5-year old survivors
+            N6.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round((N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])))                                   ### number of 6-year or older (adult) birds
+            Nterr.f[ncr,is,fut] <- round((N4.f[ncr,is,fut] * 0.024) + (N5.f[ncr,is,fut] * 0.124) + (N6.f[ncr,is,fut]))
 
-            N1.f[ncr,is,fut] <- (imp.surv[is]*ann.phi.juv.telemetry*(JUV.f[ncr,is,fut-1]- rescued[ncr,is,fut]))+(imp.surv[is]*ann.phi.sec.telemetry*(capt.release[ncr]+rescued[ncr,is,fut]))                     ### number of 1-year old survivors - add CAPT.ADD and rescued chicks with higher survival due to delayed release
-            N2.f[ncr,is,fut] <- imp.surv[is]*ann.phi.sec.telemetry*N1.f[ncr,is,fut-1]                                                      ### number of 2-year old survivors
-            N3.f[ncr,is,fut] <- imp.surv[is]*ann.phi.third.telemetry*N2.f[ncr,is,fut-1]                                                    ### number of 3-year old survivors
 
-            N4.f[ncr,is,fut] <- fut.survival[ncr,is]*N3.f[ncr,is,fut-1]                                                       ### number of 4-year old survivors
-            N5.f[ncr,is,fut] <- fut.survival[ncr,is]*N4.f[ncr,is,fut-1]                                                       ### number of 5-year old survivors
-            N6.f[ncr,is,fut] <- fut.survival[ncr,is]* (N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])                                   ### number of 6-year or older (adult) birds
-            Nterr.f[ncr,is,fut] <- N4.f[ncr,is,fut] * 0.024 + N5.f[ncr,is,fut] * 0.124 + N6.f[ncr,is,fut]
           } # fut
 
           for (fut2 in 1:(PROJECTION-1)){
@@ -860,9 +878,9 @@ initIPM <- function(){list(z.terrvis = z.init.terrvis,
 
 # MCMC settings
 nc <- 4
-nt <- 1
-ni <- 10000
-nb <- 5000
+nt <- 4
+ni <- 50000
+nb <- 10000
 
 
 # RUN THE MODEL ALLOWING FOR RANDOM ERRORS
@@ -873,7 +891,7 @@ for (i in 1:50){
   NeoIPMi <- jags(data=INPUT,
                 inits=initIPM,
                 parameters.to.save=paraIPM,
-                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\EGVU_IPM_2019_fut_scenarios_with_chickrescue.jags",
+                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\EGVU_IPM_2019_fut_scenarios_binomial.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
  , silent=T)
@@ -881,9 +899,9 @@ if("NeoIPMi" %in% ls())break
 }
 
 
-NeoIPMi
+NeoIPMi$samples
 
-save.image("EGVU_IPM_output2019.RData")
+save.image("EGVU_IPM_output2019_binomial.RData")
 
 
 
@@ -891,11 +909,53 @@ save.image("EGVU_IPM_output2019.RData")
 # EXPORT THE OUTPUT
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
-#load("EGVU_IPM_output2019.RData")
+#load("EGVU_IPM_output2019_chicks.RData")
 out<-as.data.frame(NeoIPMi$summary)
 out$parameter<-row.names(NeoIPMi$summary)
-#write.table(out,"EGVU_IPM_estimates_v1.csv", sep=",", row.names=F)
+#write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
 
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE OUTPUT TABLE FOR REPORT /MANUSCRIPT
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+head(out)
+
+TABLE1<-out %>% filter(parameter %in% c('mean.lambda','ann.phi.juv.telemetry','ann.phi.sec.telemetry','ann.phi.third.telemetry','mu.fec')) %>%
+  select(parameter,c(5,3,7))
+
+
+## retrieve the adult survival estimates averaged across all years
+selcol<-grep("ann.surv.terrvis",dimnames(NeoIPMi$samples[[1]])[[2]])
+ann.surv.terrvis<-numeric()
+for (c in 1:nc){
+  ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(NeoIPMi$samples[[c]][,selcol]))
+}
+
+TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
+#write.table(TABLE1,"clipboard", sep="\t", row.names=F)
+
+
+## retrieve the future lambdas
+selcol<-grep("fut.lambda",dimnames(NeoIPMi$samples[[1]])[[2]])
+fut.lambda<-NeoIPMi$samples[[1]][,selcol]
+for (c in 2:nc){
+  fut.lambda<-rbind(fut.lambda,NeoIPMi$samples[[c]][,selcol])
+}
+
+## give the projections proper scenario labels
+capt.release=c(0,2,4,6)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+
+FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
+  group_by(parm) %>%
+  summarise(median=quantile(f.lam,0.5),lcl=quantile(f.lam,0.025),ucl=quantile(f.lam,0.975)) %>%
+  mutate(capt.release=0, imp.surv=0) 
+FUTLAM$capt.release[grep(",",FUTLAM$parm)]<-capt.release[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],12,12))]
+FUTLAM$imp.surv[grep(",",FUTLAM$parm)]<-imp.surv[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],14,14))]
+FUTLAM$imp.surv <- ifelse(FUTLAM$imp.surv>1,paste("+",as.integer((FUTLAM$imp.surv-1)*100),"%"),"none")
+FUTLAM
+#write.table(FUTLAM[,c(1,5,6,2,3,4)],"clipboard", sep="\t", row.names=F)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1069,74 +1129,3 @@ samplesout %>% select(improve.surv,fut.lambda) %>%
   
 
 
-
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PLOT FUTURE LAMBDA AGAINST NUMBER OF CAPTIVE RELEASED BIRDS
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## deprecated after model change on 17 April 2019
-
-# #### CALCULATE PROPORTION OF SIMULATIONS WHERE LAMBDA >1 FOR EACH CAPT.ADD
-# plotdat<-data.frame()
-# for (i in 1:nc){
-#   samplesout<-as.data.frame(NeoIPMi$samples[[i]])
-#   x<-samplesout %>% select(fut.lambda,CAPT.ADD,mu.fec) %>%
-#   mutate(EGVU=round(CAPT.ADD,0)) %>%
-#   mutate(count=1) %>%
-#   mutate(stablepop=ifelse(fut.lambda>0.99999,1,0)) %>%
-#   group_by(EGVU) %>%
-#   summarise(prop_stable=sum(stablepop)/sum(count))
-# plotdat<-rbind(plotdat,x)
-# }
-# write.table(plotdat,"EGVU_IPM_samples_for_plot.csv", sep=",", row.names=F)
-# 
-# 
-# #plotdat %>% arrange(CAPT.ADD) %>%
-# #  mutate(cumprob=seq(1:length(CAPT.ADD))/length(CAPT.ADD)) %>%
-#   
-#   
-#   ggplot(plotdat)+
-#   geom_point(aes(x=EGVU,y=prop_stable,width=2))+
-#   geom_smooth(aes(x=EGVU,y=prop_stable), method='gam')+   
-#   ylab("Probability of stable or increasing population") +
-#   xlab("Number of captive-bred juveniles added per year") +
-#   theme(panel.background=element_rect(fill="white", colour="black"), 
-#         axis.text.y=element_text(size=16, color="black"),
-#         axis.text.x=element_text(size=16, color="black", vjust=0.5), 
-#         axis.title=element_text(size=16), 
-#         strip.text.x=element_text(size=16, color="black"), 
-#         strip.background=element_rect(fill="white", colour="black"), 
-#         panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(), 
-#         panel.border = element_blank())
-
-  
-  
-  ####### abandoned histogram #######
-  
-  samplesout %>% select(fut.lambda,CAPT.ADD,mu.fec) %>%
-    #filter(mu.fec<1.10) %>%
-    filter(fut.lambda>0.99999) %>%
-    #summarise(NEEDED=min(CAPT.ADD))
-    
-    ggplot()+
-    geom_histogram(aes(x=CAPT.ADD,y=..count../tapply(..count..,..PANEL..,sum)[..PANEL..]),binwidth=1)+    
-    ylab("Probability of stable or increasing population") +
-    xlab("Number of captive-bred juveniles added per year") +
-    theme(panel.background=element_rect(fill="white", colour="black"), 
-          axis.text.y=element_text(size=16, color="black"),
-          axis.text.x=element_text(size=16, color="black", vjust=0.5), 
-          axis.title=element_text(size=16), 
-          strip.text.x=element_text(size=16, color="black"), 
-          strip.background=element_rect(fill="white", colour="black"), 
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(), 
-          panel.border = element_blank())
-  
-  save.image("EGVU_IPM_output.RData")
-  
-  
-  

@@ -266,9 +266,9 @@ for (tt in 2:T.count){
 
           for (fut in 2:PROJECTION){
 
-            rescued[ncr,is,fut] ~ dunif(5,9)                                               ### number of chicks rescued and rehabilitated to improve survival 
-            nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut]) ### number of local recruits calculated as fecundity times number of territorial pairs
-            JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])          ### this line merely converts number of nestlings into a discrete number to prevent downstream errors MINUS RESCUED CHICKS
+            rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
+            nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as fecundity times number of territorial pairs
+            JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])                        ### this line merely converts number of nestlings into a discrete number to prevent downstream errors
 
             N1.f[ncr,is,fut] <- (imp.surv[is]*ann.phi.juv.telemetry*(JUV.f[ncr,is,fut-1]- rescued[ncr,is,fut]))+(imp.surv[is]*ann.phi.sec.telemetry*(capt.release[ncr]+rescued[ncr,is,fut]))                     ### number of 1-year old survivors - add CAPT.ADD and rescued chicks with higher survival due to delayed release
             N2.f[ncr,is,fut] <- imp.surv[is]*ann.phi.sec.telemetry*N1.f[ncr,is,fut-1]                                                      ### number of 2-year old survivors
@@ -280,7 +280,6 @@ for (tt in 2:T.count){
             Nterr.f[ncr,is,fut] <- N4.f[ncr,is,fut] * 0.024 + N5.f[ncr,is,fut] * 0.124 + N6.f[ncr,is,fut]
           } # fut
 
-          #for (fut2 in (T.count+1):(T.count+PROJECTION-1)){
           for (fut2 in 1:(PROJECTION-1)){
             lambda.t.f[ncr,is,fut2] <- Nterr.f[ncr,is,fut2+1] / max(Nterr.f[ncr,is,fut2],1)
             loglambda.t.f[ncr,is,fut2]<-log(lambda.t.f[ncr,is,fut2])## for calculating geometric mean of overall population growth rate

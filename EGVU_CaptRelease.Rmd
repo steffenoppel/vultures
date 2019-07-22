@@ -1,0 +1,107 @@
+---
+title: "Release of captive Egyptian Vultures to stabilise the wild population"
+author: "Steffen Oppel"
+date: "22 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE,error=FALSE,message=FALSE)
+```
+
+## How many birds do we need to release to stabilise the Balkan population?
+
+The Balkan population of Egyptian Vultures is declining, and under action C3 of the Egyptian Vulture New LIFE project we are developing a strategy to supplement the wild population with young birds bred in captivity.
+
+To understand how many young birds would need to be released, a population viability analysis can be performed, which takes all data collected under previous projects into account to estimate the demographic parameters of the population. Using these parameters (and ignoring initially that our project also aims to change some of these parameters, especially the survival probability of young and adult birds), we can project how the population would develop over the next ten years, and explore for what number of captive-bred and released Egyptian Vultures we might observe a stable population.
+
+<br>
+
+
+## Demographic model and population viability analysis
+
+We used an age-structured matrix population model in an integrated population modelling framework adapted from similar work in southern France (Lieury et al. 2015). This model was parameterised with the following data from the Balkans:
+
+* counts of adult territorial birds in Bulgaria, Greece, and FYR of Macedonia since 2006
+* observations of adult birds in `r R.terrvis` territories in Bulgaria, Greece, and FYR of Macedonia since 2006
+* breeding success data from an average of `r round(mean(breedinput$R),0)` territories per year in Bulgaria, Greece, and FYR of Macedonia since 2006
+* satellite telemetry data of `r dim(CH.telemetry)[1]` young birds from Bulgaria, Greece, and FYR of Macedonia
+
+These data were used to estimate fecundity, juvenile survival, immature survival, and adult survival probabilities, and combined with the count data in an integrated population model. This model was then projected 10 years into the future using mean estimates of fecundity and juvenile and immature survival, and maximum estimates of adult survival probability. Each year during the projection the population was supplemented with 0-15 juvenile birds released from captivity, a larger number was not included in the model as it appears to be logistically infeasible.
+
+The integrated population model was fitted in a Bayesian framework using 3 chains with 50,000 iterations for inference. Thus, we can draw on 150,000 simulations of future population trajectories taking the uncertainty in demographic parameters and the number of released juveniles into account.
+
+For each number of released juvenile birds (0-15), we can then calculate the proportion of simulations where the future population trajectory is >1, indicating a stable or increasing population. This is equivalent to the probability that the population will be stable or increase for a given number of released juveniles.
+
+<br>
+
+## Current and future population trend of Egyptian Vultures
+
+The population trajectory of Egyptian Vultures was negative (=declining population) between 2006-2017, and the mean future population growth rate was `r round(out$mean[out$parameter=='fut.lambda'],2)` indicating that the population decline may continue at a reduced rate. However, there was large uncertainty with the 95% credible interval of the population trend including stable and positive population growth rates.
+
+
+```{r, echo=FALSE,warning=FALSE,error=FALSE,message=FALSE, fig.height = 6, fig.width = 9, fig.align = "center"}
+gg <- ggplot()+
+  geom_line(data=EV.ssm, aes(x=Year, y=mean), size=1,col='darkred')+
+  geom_ribbon(data=EV.ssm,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=EV.ssm, aes(x=Year-0.1, y=mean), size=2,pch=16)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=2,col='blue', pch =4)+
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,130),breaks=seq(0,130,30), labels=as.character(seq(0,120,30)))+
+  scale_x_continuous(name="Year", breaks=seq(2006,2027,2), labels=as.character(seq(2006,2027,2)))+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text=element_text(size=18, color="black"), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+gg
+```
+<br>
+**Figure 1: Population trajectory of Egyptian Vultures in the Balkans estimated with an integrated population model. Black points and the red line are model estimates, blue X represent the original count data. The grey ribbon indicates the 95% credible interval of population size.**
+<br>
+<br>
+The demographic parameters estimated in the model and used for the future population trajectory are shown in the table below. The mean number of juveniles to be released from captivity was `r round(out$mean[out$parameter=="CAPT.ADD"],0)` individuals per year.
+<br>
+<br>
+
+
+```{r  summary, echo=FALSE,warning=FALSE,error=FALSE,message=FALSE}
+
+summary<- round(out[c(43:57,62,59,61,60),c(1,3,7)],3)
+
+kable(summary, caption="Table 1: Demographic parameters of the Balkan Egyptian Vulture population based on an integrated population model; ann.phi and ann.surv are annual survival probabilities for young and adult birds, mu.fec is the mean fecundity per pair, and CAPT.ADD is the number of juveniles to be released every year.",col.names=  c("mean","lower credible interval","upper credible interval"))
+```
+<br>
+<br>
+
+
+## Probability of success of the captive release programme
+
+The more captive juveniles are released every year, the greater is the probability that the population may stabilise. However, owing to the very low juvenile and immature survival probabilities over the first three years, even the release of 15 captive-reared birds every year over the next 10 years will result in only a `r round(max(plotdat$prop_stable),3)*100`% probability that the population will stabilise. Thus, while captive-bred birds can help, we will not rescue the Balkan Egyptian Vulture population unless we can substantially increase the survival probabilities of juvenile and adult birds in the wild!
+
+
+```{r, echo=FALSE,warning=FALSE,error=FALSE,message=FALSE, fig.height = 6, fig.width = 8, fig.align = "center"}
+gg <- ggplot(plotdat)+
+  geom_point(aes(x=EGVU,y=prop_stable,width=2))+
+  geom_smooth(aes(x=EGVU,y=prop_stable), method='gam')+   
+  ylab("Probability of stable or increasing population") +
+  xlab("Number of captive-bred juveniles added per year") +
+  theme(panel.background=element_rect(fill="white", colour="black"), 
+        axis.text.y=element_text(size=16, color="black"),
+        axis.text.x=element_text(size=16, color="black", vjust=0.5), 
+        axis.title=element_text(size=16), 
+        strip.text.x=element_text(size=16, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank())
+gg
+```
+<br>
+**Figure 2: Probability that the Balkan Egyptian Vulture population will have an annual population growth rate of >= 1 (indicating stable or increasing population) depending on the number of juvenile birds released from captivity every year.**
+<br>
+<br>
+
