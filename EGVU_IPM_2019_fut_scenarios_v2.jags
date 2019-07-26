@@ -132,8 +132,7 @@ for (tt in 2:T.count){
     #for (t in 1:nyear.fec){
       J.fec[tlc] ~ dpois(rho.fec[tlc])
       rho.fec[tlc] <- R.fec[tlc]*mu.fec
-      J.fec.red[tlc] ~ dbinom(rho.fec.red[tlc])
-      rho.fec.red[tlc] <- R.fec[tlc]*mu.fec.red
+      J.fec.red[tlc] ~ dbin(mu.fec.red,R.fec[tlc])
     } #	close loop over every year in which we have count and fecundity data
 
 
