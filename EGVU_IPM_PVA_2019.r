@@ -453,7 +453,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 
 # adapted from IPM for French Egyptian vulture populations Lieury et al. 2016
 
-try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
+try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
 sink("EGVU_IPM_2019_fut_scenarios_v2.jags")
@@ -727,7 +727,7 @@ for (tt in 2:T.count){
           for (fut in 2:PROJECTION){
 
             ### probabilistic formulation
-            rescued[ncr,is,fut] ~ dunif(3,11)                                          ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
+            rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (mu.fec.red * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
             N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]+rescued[ncr,is,fut]))             ### number of 1-year old survivors 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
@@ -887,10 +887,10 @@ nb <- 10000
 rm(NeoIPMi)
 for (i in 1:50){
   try(
-  NeoIPMi <- jags(data=INPUT,
+  NeoIPMeggred <- jags(data=INPUT,
                 inits=initIPM,
                 parameters.to.save=paraIPM,
-                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\EGVU_IPM_2019_fut_scenarios_binomial.jags",
+                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios_v2.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
  , silent=T)

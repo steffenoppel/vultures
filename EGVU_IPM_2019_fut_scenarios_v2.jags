@@ -268,7 +268,7 @@ for (tt in 2:T.count){
           for (fut in 2:PROJECTION){
 
             ### probabilistic formulation
-            rescued[ncr,is,fut] ~ dunif(3,11)                                          ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
+            rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (mu.fec.red * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
             N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]+rescued[ncr,is,fut]))             ### number of 1-year old survivors 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
