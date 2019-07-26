@@ -23,6 +23,10 @@
 
 # update on 26 July 2019: re-run model and provided extinction probabilities for report
 
+## MAJOR UPDATE 26 July 2019: include egg reduction to harvest second eggs
+## calculate fecundity when only 1 egg available (reduction from normal fecundity)
+## add harvested eggs as additional juveniles to be released
+
 
 library(readxl)
 library(jagsUI)
@@ -59,11 +63,17 @@ breedinput<- breed %>% filter(Year>2005) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
 
+### MODIFY BREEDINPUT FOR EGG HARVEST ###
 
+breedinput1EGG<- breed %>% filter(Year>2005) %>%
+  filter(!is.na(breed_success)) %>%
+  mutate(count=1) %>%
+  mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
+  mutate(fledglings=ifelse(fledglings==2,1,fledglings)) %>%     ### remove the second egg and fledgling
+  group_by(Year) %>%
+  summarise(R=sum(count), J=sum(fledglings))
 
-
-
-
+breedinput$J-breedinput1EGG$J
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
@@ -446,7 +456,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_fut_scenarios_binomial.jags")
+sink("EGVU_IPM_2019_fut_scenarios_v2.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -457,6 +467,7 @@ model {
 # - adult survival based on territory occupancy
 # - pre breeding census, female-based assuming equal sex ratio & survival
 # - productivity supplemented by captive-bred juveniles (0-10 per year)
+# - fecundity reduced by harvesting second eggs
 #-------------------------------------------------
 
 
@@ -466,7 +477,7 @@ model {
 
 # Priors and constraints FOR FECUNDITY
     mu.fec ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
-    
+    mu.fec.red ~ dunif(0,1)       # Priors on fecundity after removing 2nd egg can range from 0-1 chick per pair (uninformative)    
 
 # Priors and constraints FOR POPULATION COUNTS OBSERVATION
     sigma.obs.count ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
@@ -575,11 +586,13 @@ for (tt in 2:T.count){
 
 
 # -------------------------------------------------        
-# 2.3. Likelihood for fecundity: Poisson regression from the number of surveyed broods
+# 2.3. Likelihood for fecundity: Poisson regression from the number of surveyed broods (or binom for single broods after egg harvest)
 # -------------------------------------------------
     #for (t in 1:nyear.fec){
       J.fec[tlc] ~ dpois(rho.fec[tlc])
       rho.fec[tlc] <- R.fec[tlc]*mu.fec
+      J.fec.red[tlc] ~ dbinom(rho.fec.red[tlc])
+      rho.fec.red[tlc] <- R.fec[tlc]*mu.fec.red
     } #	close loop over every year in which we have count and fecundity data
 
 
@@ -689,10 +702,8 @@ for (tt in 2:T.count){
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
 
 
-
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
-      # CAPT.ADD ~ dunif(4,6)   ## changed from 0-15
 
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
@@ -711,27 +722,14 @@ for (tt in 2:T.count){
         N5.f[ncr,is,1] <- N5[T.count]
         N6.f[ncr,is,1] <- N6[T.count]
         Nterr.f[ncr,is,1] <- Nterr[T.count]
-        #rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+        rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
 
           for (fut in 2:PROJECTION){
-#             ### deterministic formulation
-#             rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
-#             nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as fecundity times number of territorial pairs
-#             JUV.f[ncr,is,fut] ~ dpois(nestlings.f[ncr,is,fut])                        ### this line merely converts number of nestlings into a discrete number to prevent downstream errors
-# 
-#             N1.f[ncr,is,fut] <- (imp.surv[is]*ann.phi.juv.telemetry*(JUV.f[ncr,is,fut-1]- rescued[ncr,is,fut]))+(imp.surv[is]*ann.phi.sec.telemetry*(capt.release[ncr]+rescued[ncr,is,fut]))                     ### number of 1-year old survivors - add CAPT.ADD and rescued chicks with higher survival due to delayed release
-#             N2.f[ncr,is,fut] <- imp.surv[is]*ann.phi.sec.telemetry*N1.f[ncr,is,fut-1]                                                      ### number of 2-year old survivors
-#             N3.f[ncr,is,fut] <- imp.surv[is]*ann.phi.third.telemetry*N2.f[ncr,is,fut-1]                                                    ### number of 3-year old survivors
-# 
-#             N4.f[ncr,is,fut] <- fut.survival[ncr,is]*N3.f[ncr,is,fut-1]                                                       ### number of 4-year old survivors
-#             N5.f[ncr,is,fut] <- fut.survival[ncr,is]*N4.f[ncr,is,fut-1]                                                       ### number of 5-year old survivors
-#             N6.f[ncr,is,fut] <- fut.survival[ncr,is]* (N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])                                   ### number of 6-year or older (adult) birds
-#             Nterr.f[ncr,is,fut] <- N4.f[ncr,is,fut] * 0.024 + N5.f[ncr,is,fut] * 0.124 + N6.f[ncr,is,fut]
 
             ### probabilistic formulation
-            #rescued[ncr,is,fut] ~ dunif(5,9)                                          ### number of chicks rescued and rehabilitated to improve survival 
-            nestlings.f[ncr,is,fut] <- (mu.fec * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as fecundity times number of territorial pairs
-            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]))             ### number of 1-year old survivors 
+            rescued[ncr,is,fut] ~ dunif(3,11)                                          ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
+            nestlings.f[ncr,is,fut] <- (mu.fec.red * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
+            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]+rescued[ncr,is,fut]))             ### number of 1-year old survivors 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
             N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
@@ -786,6 +784,7 @@ INPUT <- list(y.terrvis = y.terrvis,
 
               R.fec=breedinput$R,
               J.fec=breedinput$J,
+              J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
 
               y.telemetry = y.telemetry,
               f.telemetry = f.telemetry,
@@ -795,7 +794,7 @@ INPUT <- list(y.terrvis = y.terrvis,
               x.telemetry = x.telemetry,
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
-              PROJECTION=10,
+              PROJECTION=25,
               scen.capt.release=4,
               scen.imp.surv=7,
               capt.release=c(0,2,4,6),
@@ -1178,7 +1177,7 @@ ext.probs<-allsamp %>% select(capt.release,imp.surv,value) %>%
   summarise(ext.prob=sum(inc)/sum(n)) %>%
   arrange(desc(ext.prob))
 
-
+fwrite(ext.probs,"EGVU_extinction.prob_2028.csv")
 
 
   
