@@ -7,8 +7,6 @@
 # modified by Steffen oppel 4 April 2018
 # goal is to assess population viability with and without captive released juveniles on Balkans
 
-# curtailed data from 2006 - 2017 because we have territory monitoring data for that period
-
 # pasted together data prep and model from various files on 16 May 2018
 # update 17 May 2018: trying to troubleshoot dbinom error
 # updated 22 May 2018: breed.prop cannot be a stochastic node, because 'slicer' gets stuck - tried with multiple distributions, priors and initials, but never works
@@ -22,6 +20,8 @@
 
 # update on 1 May 2019: suggestion from Volen to also include 9 'rescued' chicks taken from the wild but rehabilitated and released with higher survival probability
 # update 3 May: future lambda lower than mean lambda - included binomial draws for survival for future projection
+
+# update on 26 July 2019: re-run model and provided extinction probabilities for report
 
 
 library(readxl)
@@ -38,7 +38,7 @@ select<-dplyr::select
 # LOAD AND MANIPULATE POPULATION MONITORING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE)
+#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 load("EGVU_poptrend_input.RData")
@@ -71,7 +71,7 @@ breedinput<- breed %>% filter(Year>2005) %>%
 
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
-system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
+#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
 load("RODBC_EGVU_telemetry_input.RData")
 
 
@@ -202,7 +202,7 @@ ch.init <- function(ch, f){
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_surveys.r")), wait = TRUE, invisible = FALSE)
+#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_surveys.r")), wait = TRUE, invisible = FALSE)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 
@@ -1064,15 +1064,41 @@ dev.off()
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# EXTRACT THE SAMPLES WHERE FUTURE LAMBDA IS POSITIVE 
+# QUANTIFY PROPORTION OF SIMULATIONS (=PROBABILITY) THAT FUTURE LAMBDA IS POSITIVE 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 samplesout<-as.data.frame(rbind(NeoIPMi$samples[[1]],NeoIPMi$samples[[2]],NeoIPMi$samples[[3]]))
 head(samplesout)
 
-ggplot(samplesout)+
-  geom_point(aes(x=improve.surv,y=fut.lambda,width=2))+
-  geom_hline(aes(yintercept=1), color='red', size=2)+   
+## give the projections proper scenario labels
+capt.release=c(0,2,4,6)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+
+allsamp <- samplesout %>% gather(key="parm", value="value") %>%
+  filter(grepl("fut.lambda",parm)) %>%
+  mutate(capt.release=0, imp.surv=0)
+
+allsamp$capt.release[grep(",",allsamp$parm)]<-capt.release[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],12,12))]
+allsamp$imp.surv[grep(",",allsamp$parm)]<-imp.surv[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],14,14))]
+allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
+
+## create factors for plot labels and order them appropriately
+allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
+allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+
+
+ggplot(allsamp)+
+  #geom_point(aes(x=imp.surv,y=value, color=capt.release),size=0.5)+
+  geom_hline(aes(yintercept=1), color='red', size=2)+
+  geom_violin(aes(x=imp.surv,y=value)) +
+  
+  facet_wrap(~capt.release,ncol=2) +
+  
+  ## format axis ticks
+  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
+  
+  
   ylab("Future population trend") +
   xlab("Improvement in survival probability") +
   theme(panel.background=element_rect(fill="white", colour="black"), 
@@ -1086,19 +1112,71 @@ ggplot(samplesout)+
         panel.border = element_blank())
 
 
-### find the cutoff for lambda>= 1
-## with a confidence of 90%
-
-samplesout %>% select(improve.surv,fut.lambda) %>%
-  mutate(improve.surv=round(improve.surv,2)) %>%
-  group_by(improve.surv) %>%
-  summarise(lcl=quantile(fut.lambda,0.1)) %>%
-  arrange(desc(lcl))
 
 
+### quantify what proportion of simulations result in future lambda >1
+
+allsamp %>% select(capt.release,imp.surv,value) %>%
+  mutate(n=1, inc=ifelse(value>0.9999,1,0)) %>%
+  group_by(imp.surv,capt.release) %>%
+  summarise(prop.increase=sum(inc)/sum(n))
 
 
 
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# QUANTIFY PROPORTION OF SIMULATIONS (=PROBABILITY) THAT FUTURE LAMBDA IS POSITIVE 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+head(samplesout)
+allsamp <- samplesout %>% gather(key="parm", value="value") %>%
+  filter(grepl("Nterr.f",parm)) %>%
+  filter(grepl(",10]",parm)) %>%   ### only use final year
+  mutate(capt.release=0, imp.surv=0)
+
+allsamp$capt.release[grep(",",allsamp$parm)]<-capt.release[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],9,9))]
+allsamp$imp.surv[grep(",",allsamp$parm)]<-imp.surv[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],11,11))]
+allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
+
+## create factors for plot labels and order them appropriately
+allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
+allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+
+
+
+### PLOT EXTINCTION RISK
+pdf("EV_extinction_risk2028.pdf", width=10, height=7)
+ggplot(allsamp)+
+  geom_hline(aes(yintercept=10), color='red', size=2)+
+  geom_violin(aes(x=imp.surv,y=value)) +
+  
+  facet_wrap(~capt.release,ncol=2) +
+  
+  ## format axis ticks
+  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
+  
+  
+  ylab("Population size in 2028") +
+  xlab("Improvement in survival probability") +
+  theme(panel.background=element_rect(fill="white", colour="black"), 
+        axis.text.y=element_text(size=16, color="black"),
+        axis.text.x=element_text(size=16, color="black", vjust=0.5), 
+        axis.title=element_text(size=16), 
+        strip.text.x=element_text(size=16, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank())
+dev.off()
+
+### quantify what proportion of simulations result in future pop <10 birds (=extinct)
+
+ext.probs<-allsamp %>% select(capt.release,imp.surv,value) %>%
+  mutate(n=1, inc=ifelse(value<10,1,0)) %>%
+  group_by(imp.surv,capt.release) %>%
+  summarise(ext.prob=sum(inc)/sum(n)) %>%
+  arrange(desc(ext.prob))
 
 
 
