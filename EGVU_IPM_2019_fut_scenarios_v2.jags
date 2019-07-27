@@ -17,8 +17,8 @@ model {
 #-------------------------------------------------
 
 # Priors and constraints FOR FECUNDITY
-    mu.fec ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
-    mu.fec.red ~ dunif(0,1)       # Priors on fecundity after removing 2nd egg can range from 0-1 chick per pair (uninformative)    
+    mu.fec[1] ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
+    mu.fec[2] ~ dunif(0,1)       # Priors on fecundity after removing 2nd egg can range from 0-1 chick per pair (uninformative)    
 
 # Priors and constraints FOR POPULATION COUNTS OBSERVATION
     sigma.obs.count ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
@@ -103,7 +103,7 @@ model {
     
 for (tt in 2:T.count){
 
-    nestlings[tt] <- mu.fec * 0.5 * Nterr[tt]                                                              ### number of local recruits
+    nestlings[tt] <- mu.fec[1] * 0.5 * Nterr[tt]                                                              ### number of local recruits
     #JUV[tt] ~ dpois(nestlings[tt])                                                              ### need a discrete number otherwise dbin will fail
     N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(nestlings[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
     N2[tt] ~ dbin(ann.phi.sec.telemetry, round(N1[tt-1]))                                                      ### number of 2-year old survivors
@@ -131,8 +131,8 @@ for (tt in 2:T.count){
 # -------------------------------------------------
     #for (t in 1:nyear.fec){
       J.fec[tlc] ~ dpois(rho.fec[tlc])
-      rho.fec[tlc] <- R.fec[tlc]*mu.fec
-      J.fec.red[tlc] ~ dbin(mu.fec.red,R.fec[tlc])
+      rho.fec[tlc] <- R.fec[tlc]*mu.fec[1]
+      J.fec.red[tlc] ~ dbin(mu.fec[2],R.fec[tlc])
     } #	close loop over every year in which we have count and fecundity data
 
 
@@ -240,10 +240,13 @@ for (tt in 2:T.count){
 # -------------------------------------------------
 ### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
+### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
 
 
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
+
+      fut.fec[ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
 
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
@@ -268,7 +271,7 @@ for (tt in 2:T.count){
 
             ### probabilistic formulation
             rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
-            nestlings.f[ncr,is,fut] <- (mu.fec.red * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
+            nestlings.f[ncr,is,fut] <- (fut.fec[ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
             N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]+rescued[ncr,is,fut]))             ### number of 1-year old survivors 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
