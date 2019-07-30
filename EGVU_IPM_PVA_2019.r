@@ -457,7 +457,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_fut_scenarios_v2.jags")
+sink("EGVU_IPM_2019_EggRem5_NoRescue.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -706,7 +706,9 @@ for (tt in 2:T.count){
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
 
-      fut.fec[ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
+      #fut.fec[ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
+      fut.fec[1:5] <-mu.fec[2]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
+      fut.fec[5:PROJECTION] <-mu.fec[1]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
 
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
@@ -730,9 +732,9 @@ for (tt in 2:T.count){
           for (fut in 2:PROJECTION){
 
             ### probabilistic formulation
-            rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
+            #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (fut.fec[ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
-            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]+rescued[ncr,is,fut]))             ### number of 1-year old survivors 
+            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
             N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
@@ -887,18 +889,30 @@ nb <- 10000
 
 # RUN THE MODEL ALLOWING FOR RANDOM ERRORS
 
-rm(NeoIPMi)
-for (i in 1:50){
-  try(
-  NeoIPMeggred <- jags(data=INPUT,
+# rm(NeoIPMi)
+# for (i in 1:50){
+#   try(
+NeoIPMbasic <- jags(data=INPUT,
                 inits=initIPM,
                 parameters.to.save=paraIPM,
-                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios_v2.jags",
+                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
- , silent=T)
-if("NeoIPMi" %in% ls())break
-}
+NeoIPMeggredNoRescue <- jags(data=INPUT,
+                       inits=initIPM,
+                       parameters.to.save=paraIPM,
+                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
+                       n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+
+NeoIPMeggredRescue <- jags(data=INPUT,
+                    inits=initIPM,
+                    parameters.to.save=paraIPM,
+                    model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios_v2.jags",
+                    n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+  
+# , silent=T)
+# if("NeoIPMi" %in% ls())break
+# }
 
 
 NeoIPMi$samples
