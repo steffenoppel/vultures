@@ -54,13 +54,16 @@ breedinput<- breed %>% filter(Year>2005) %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 load("EGVU_IPM_output2019_v2.RData")
-out<-as.data.frame(NeoIPMi$summary)
-out$parameter<-row.names(NeoIPMi$summary)
+out<-as.data.frame(NeoIPMbasic$summary)
+out$parameter<-row.names(NeoIPMbasic$summary)
 #write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
 
-out<-as.data.frame(NeoIPMeggred$summary)
-out$parameter<-row.names(NeoIPMeggred$summary)
+out<-as.data.frame(NeoIPMeggredNoRescue$summary)
+out$parameter<-row.names(NeoIPMeggredNoRescue$summary)
 #write.table(out,"EGVU_IPM_future_v2.csv", sep=",", row.names=F)
+
+out<-as.data.frame(NeoIPMeggredRescue$summary)
+out$parameter<-row.names(NeoIPMeggredRescue$summary)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -110,6 +113,55 @@ FUTLAM
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # GRAPH 1: POPULATION TRAJECTORY UNDER THE NO MANAGEMENT SCENARIO
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+out<-as.data.frame(NeoIPMbasic$summary)
+out$parameter<-row.names(NeoIPMbasic$summary)
+
+## retrieve the population projections
+EV.fut<-out[(grep("Nterr",out$parameter)),c(12,1,3,7)] %>%
+  mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=4*7)))
+names(EV.fut)[1:4]<-c('parm','mean','lcl','ucl')
+
+## give the projections proper scenario labels
+capt.release=c(0,2,4,6)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
+EV.fut$capt.release[grep(",",EV.fut$parm)]<-capt.release[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],9,9))]
+EV.fut$imp.surv[grep(",",EV.fut$parm)]<-imp.surv[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],11,11))]
+EV.fut <- EV.fut %>% filter(capt.release==0 & imp.surv<1.0001)
+
+### produce plot FOR BASELINE TRAJECTORY
+
+#pdf("EV_population_projection_BASELINE.pdf", width=10, height=7)
+#jpeg("EV_population_projection_BASELINE.jpg", width=9, height=6, units="in", res=600, quality=100)
+
+ggplot()+
+  geom_line(data=EV.fut, aes(x=Year, y=mean), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
+
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,130),breaks=seq(0,130,30), labels=as.character(seq(0,130,30)))+
+  scale_x_continuous(name="Year", breaks=seq(2006,2068,5), labels=as.character(seq(2006,2068,5)))+
+  
+  ## ADD LINES FOR EXTINCTION
+  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$mean<5))],linetype='dashed', size=1,colour="firebrick")+
+  
+  ## ADD LABELS FOR EXTINCTION
+  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$lcl<5))],label=paste("5% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))])), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$mean<5))],label=paste("50% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$mean<5))])), size=5, colour="firebrick", hjust=0)+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+dev.off()
+
+
 
 
 
@@ -119,6 +171,106 @@ FUTLAM
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # GRAPH 2: POPULATION TRAJECTORY WHEN REMOVING ALL SECOND CHICKS FOR 5 YEARS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+out<-as.data.frame(NeoIPMeggredNoRescue$summary)
+out$parameter<-row.names(NeoIPMeggredNoRescue$summary)
+
+## retrieve the population projections
+EV.fut<-out[(grep("Nterr",out$parameter)),c(12,1,3,7)] %>%
+  mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=4*7)))
+names(EV.fut)[1:4]<-c('parm','mean','lcl','ucl')
+
+## give the projections proper scenario labels
+capt.release=c(0,2,4,6)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
+EV.fut$capt.release[grep(",",EV.fut$parm)]<-capt.release[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],9,9))]
+EV.fut$imp.surv[grep(",",EV.fut$parm)]<-imp.surv[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],11,11))]
+EV.fut <- EV.fut %>% filter(capt.release==0 & imp.surv<1.0001)
+
+### produce plot FOR BASELINE TRAJECTORY
+
+#pdf("EV_population_projection_5YEARCHICKREMOVAL.pdf", width=10, height=7)
+#jpeg("EV_population_projection_5YEARCHICKREMOVAL.jpg", width=9, height=6, units="in", res=600, quality=100)
+
+ggplot()+
+  geom_line(data=EV.fut, aes(x=Year, y=mean), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,130),breaks=seq(0,130,30), labels=as.character(seq(0,130,30)))+
+  scale_x_continuous(name="Year", breaks=seq(2006,2068,5), labels=as.character(seq(2006,2068,5)))+
+  
+  ## ADD LINES FOR EXTINCTION
+  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$mean<5))],linetype='dashed', size=1,colour="firebrick")+
+  
+  ## ADD LABELS FOR EXTINCTION
+  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$lcl<5))],label=paste("5% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))])), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$mean<5))],label=paste("50% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$mean<5))])), size=5, colour="firebrick", hjust=0)+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+dev.off()
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GRAPH 3: EXTINCTION PROBABILITY OVER TIME WITHOUT RESCUED CHICKS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+samplesout<-as.data.frame(rbind(NeoIPMeggredNoRescue$samples[[1]],NeoIPMeggredNoRescue$samples[[2]],NeoIPMeggredNoRescue$samples[[3]]))
+head(samplesout)
+
+extprop <- samplesout %>% gather(key="parm", value="value") %>%
+  filter(grepl("Nterr.f",parm)) %>%
+  mutate(capt.release=as.numeric(substr(parm,9,9)), imp.surv=as.numeric(substr(parm,11,11)))  %>%
+  filter(imp.surv %in% c(1,2,3,4)) %>% ### reduce plotting options
+  mutate(Year=ifelse(nchar(parm)==14,substr(parm,13,13),substr(parm,13,14))) %>%
+  mutate(n=1, inc=ifelse(value<10,1,0)) %>%
+  group_by(imp.surv,capt.release,Year) %>%
+  summarise(ext.prob=sum(inc)/sum(n)) %>%
+  mutate(Year=as.numeric(Year)+2018) 
+
+
+## create factors for plot labels and order them appropriately
+extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
+
+
+
+### produce plot with 4 panels and multiple lines per year
+
+#pdf("EV_extinction_probability_C3.pdf", width=10, height=7)
+#jpeg("EV_extinction_probability_C3.jpg", width=9, height=6, units="in", res=600, quality=100)
+ggplot(data=extprop)+
+  geom_line(aes(x=Year, y=ext.prob, color=capt.release), size=1)+
+  facet_wrap(~imp.surv,ncol=2) +
+  
+  ## format axis ticks
+  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
+  scale_x_continuous(name="Year", breaks=seq(2019,2068,5), labels=as.character(seq(2019,2068,5)))+
+  guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"),
+        panel.grid.major = element_line(colour="darkgrey"),
+        panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+dev.off()
+
+
 
 
 
@@ -306,54 +458,6 @@ ext.probs<-allsamp %>% select(capt.release,imp.surv,value) %>%
 
 fwrite(ext.probs,"EGVU_extinction.prob_2028.csv")
 
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PLOT PROBABILITY OF EXTINCTION OVER TIME 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-head(samplesout)
-extprop <- samplesout %>% gather(key="parm", value="value") %>%
-  filter(grepl("Nterr.f",parm)) %>%
-  mutate(capt.release=as.numeric(substr(parm,9,9)), imp.surv=as.numeric(substr(parm,11,11)))  %>%
-  filter(imp.surv %in% c(1,2,3,4)) %>% ### reduce plotting options
-  mutate(Year=ifelse(nchar(parm)==14,substr(parm,13,13),substr(parm,13,14))) %>%
-  mutate(n=1, inc=ifelse(value<10,1,0)) %>%
-  group_by(imp.surv,capt.release,Year) %>%
-  summarise(ext.prob=sum(inc)/sum(n)) %>%
-  mutate(Year=as.numeric(Year)+2018) 
-
-
-## create factors for plot labels and order them appropriately
-extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
-
-
-
-### produce plot with 4 panels and multiple lines per year
-
-#pdf("EV_extinction_probability_C3.pdf", width=10, height=7)
-#postscript("Fig1_Balkan.eps", width=9, height=6)
-#jpeg("Fig1_Balkan.jpg", width=9, height=6, units="in", res=600, quality=100)
-#par(oma=c(0,0,0,0),mar=c(4.2,4.5,0,0.5), cex=1.2)
-ggplot(data=extprop)+
-  geom_line(aes(x=Year, y=ext.prob, color=capt.release), size=1)+
-  facet_wrap(~imp.surv,ncol=2) +
-  
-  ## format axis ticks
-  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,0.8),breaks=seq(0,0.8,0.2), labels=as.character(seq(0,80,20)))+
-  scale_x_continuous(name="Year", breaks=seq(2019,2048,5), labels=as.character(seq(2019,2048,5)))+
-  guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
-  
-  ## beautification of the axes
-  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=18, color="black"),
-        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
-        axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=18, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"))
-
-dev.off()
 
 
 

@@ -700,15 +700,25 @@ for (tt in 2:T.count){
 # -------------------------------------------------
 ### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
-### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
+
+
+    ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
+
+    for (fut in 1:5){
+      fut.fec[fut] <-mu.fec[2]  ## first 5 years all second chicks are taken into captivity
+    }
+    for (fut in 6:PROJECTION){
+      fut.fec[fut] <-mu.fec[1]  ## no chicks taken after 5 years anymore
+    }
+
+
+
 
 
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
 
       #fut.fec[ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
-      fut.fec[1:5] <-mu.fec[2]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
-      fut.fec[5:PROJECTION] <-mu.fec[1]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
 
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
@@ -727,14 +737,18 @@ for (tt in 2:T.count){
         N5.f[ncr,is,1] <- N5[T.count]
         N6.f[ncr,is,1] <- N6[T.count]
         Nterr.f[ncr,is,1] <- Nterr[T.count]
-        rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+        #rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+        N1nestlings.f[ncr,is,1] <- 0
+        N1released.f[ncr,is,1] <- N1[T.count]
 
           for (fut in 2:PROJECTION){
 
             ### probabilistic formulation
             #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (fut.fec[ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
-            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]+capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1.f[ncr,is,fut] <-  N1nestlings.f[ncr,is,fut] + N1released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
             N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
@@ -799,7 +813,7 @@ INPUT <- list(y.terrvis = y.terrvis,
               x.telemetry = x.telemetry,
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
-              PROJECTION=30,
+              PROJECTION=50,
               scen.capt.release=4,
               scen.imp.surv=7,
               capt.release=c(0,2,4,6),
@@ -895,7 +909,7 @@ nb <- 10000
 NeoIPMbasic <- jags(data=INPUT,
                 inits=initIPM,
                 parameters.to.save=paraIPM,
-                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios.jags",
+                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 NeoIPMeggredNoRescue <- jags(data=INPUT,
@@ -907,7 +921,7 @@ NeoIPMeggredNoRescue <- jags(data=INPUT,
 NeoIPMeggredRescue <- jags(data=INPUT,
                     inits=initIPM,
                     parameters.to.save=paraIPM,
-                    model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_fut_scenarios_v2.jags",
+                    model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 # , silent=T)
