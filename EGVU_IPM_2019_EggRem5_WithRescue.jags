@@ -9,6 +9,7 @@ model {
 # - pre breeding census, female-based assuming equal sex ratio & survival
 # - productivity supplemented by captive-bred juveniles (0-10 per year)
 # - fecundity reduced by harvesting second eggs
+# - chicks rescued will be added with higher survival
 #-------------------------------------------------
 
 
@@ -241,7 +242,6 @@ for (tt in 2:T.count){
 ### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
 
-
     ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
 
     for (fut in 1:5){
@@ -250,9 +250,6 @@ for (tt in 2:T.count){
     for (fut in 6:PROJECTION){
       fut.fec[fut] <-mu.fec[1]  ## no chicks taken after 5 years anymore
     }
-
-
-
 
 
     # CAPTIVE RELEASE OF JUVENILE BIRDS
@@ -277,17 +274,18 @@ for (tt in 2:T.count){
         N5.f[ncr,is,1] <- N5[T.count]
         N6.f[ncr,is,1] <- N6[T.count]
         Nterr.f[ncr,is,1] <- Nterr[T.count]
-        #rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
+        rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
         N1nestlings.f[ncr,is,1] <- 0
         N1released.f[ncr,is,1] <- N1[T.count]
-
+        
+        
           for (fut in 2:PROJECTION){
 
             ### probabilistic formulation
-            #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
-            nestlings.f[ncr,is,fut] <- (fut.fec[ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
+            rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
+            nestlings.f[ncr,is,fut] <- (fut.fec[fut] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
             N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
-            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(capt.release[ncr]+rescued[ncr,is,fut]))             ###  number of 1-year old survivors 
             N1.f[ncr,is,fut] <-  N1nestlings.f[ncr,is,fut] + N1released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
             N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
