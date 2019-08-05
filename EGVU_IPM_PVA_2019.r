@@ -457,7 +457,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_EggRem5_NoRescue.jags")
+sink("EGVU_IPM_2019_COMBINED.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -467,8 +467,10 @@ model {
 # - age-specific survival derived from tracking data
 # - adult survival based on territory occupancy
 # - pre breeding census, female-based assuming equal sex ratio & survival
+# - FUTURE PROJECTION COMBINES SCENARIOS: baseline scenario (=do nothing, no chick removal)
 # - productivity supplemented by captive-bred juveniles (0-10 per year)
-# - fecundity reduced by harvesting second eggs
+# - fecundity reduced by harvesting second eggs ONLY FOR SCENARIOS OF CAPTIVE RELEASES
+# - rescue of wild chicks optional (currently disabled)
 #-------------------------------------------------
 
 
@@ -702,23 +704,20 @@ for (tt in 2:T.count){
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
 
 
-    ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
-
-    for (fut in 1:5){
-      fut.fec[fut] <-mu.fec[2]  ## first 5 years all second chicks are taken into captivity
-    }
-    for (fut in 6:PROJECTION){
-      fut.fec[fut] <-mu.fec[1]  ## no chicks taken after 5 years anymore
-    }
-
-
-
-
 
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
 
-      #fut.fec[ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released
+      ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
+
+      for (fut in 1:5){
+        fut.fec[fut,ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released for first 5 years all second chicks are taken into captivity
+      }
+      for (fut in 6:PROJECTION){
+        fut.fec[fut,ncr] <-mu.fec[1]  ## no chicks taken after 5 years anymore
+      }
+
+
 
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
@@ -745,7 +744,7 @@ for (tt in 2:T.count){
 
             ### probabilistic formulation
             #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
-            nestlings.f[ncr,is,fut] <- (fut.fec[ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
+            nestlings.f[ncr,is,fut] <- (fut.fec[fut,ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
             N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
             N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
             N1.f[ncr,is,fut] <-  N1nestlings.f[ncr,is,fut] + N1released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
@@ -923,6 +922,12 @@ NeoIPMeggredRescue <- jags(data=INPUT,
                     parameters.to.save=paraIPM,
                     model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+
+NeoIPM.ALL <- jags(data=INPUT,
+                           inits=initIPM,
+                           parameters.to.save=paraIPM,
+                           model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_COMBINED.jags",
+                           n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 # , silent=T)
 # if("NeoIPMi" %in% ls())break
