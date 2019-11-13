@@ -252,7 +252,7 @@ for (tt in 2:T.count){
       ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
 
       for (fut in 1:5){
-        fut.fec[fut,ncr] <-mu.fec[min(capt.release[ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released for first 5 years all second chicks are taken into captivity
+        fut.fec[fut,ncr] <-mu.fec[min(capt.release[fut,ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released for first 5 years all second chicks are taken into captivity
       }
       for (fut in 6:PROJECTION){
         fut.fec[fut,ncr] <-mu.fec[1]  ## no chicks taken after 5 years anymore
