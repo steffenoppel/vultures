@@ -468,7 +468,7 @@ yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_COMBINED.jags")
+sink("EGVU_IPM_2019_ExtendedProjection.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -734,8 +734,6 @@ for (tt in 2:T.count){
       # SPECIFY IMPROVEMENT OF SURVIVAL
       for (is in 1:scen.imp.surv){ 
     
-        # improve.surv ~ dunif(1,1.10)
-        fut.survival[ncr,is] <-min(imp.surv[is]*mean(ann.surv.terrvis[1:nyears.terrvis]),1) ### invalid parent error if survival>1
 
         ## POPULATION PROCESS
         ### DOES NOT WORK WITH SAME ARRAY OF POP TRAJECTORY AS 3 dimensions required
@@ -754,17 +752,19 @@ for (tt in 2:T.count){
 
           for (fut in 2:PROJECTION){
 
+            fut.survival[ncr,is,fut] <-min(imp.surv[fut,is]*mean(ann.surv.terrvis[1:nyears.terrvis]),1) ### invalid parent error if survival>1
+
             ### probabilistic formulation
             #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (fut.fec[fut,ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
-            N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
-            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(capt.release[ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(capt.release[fut,ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
             N1.f[ncr,is,fut] <-  N1nestlings.f[ncr,is,fut] + N1released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
-            N2.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
-            N3.f[ncr,is,fut] ~ dbin(min((imp.surv[is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
-            N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
-            N5.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round(N4.f[ncr,is,fut-1]))                                                       ### number of 5-year old survivors
-            N6.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is],round((N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])))                                   ### number of 6-year or older (adult) birds
+            N2.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
+            N3.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
+            N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
+            N5.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round(N4.f[ncr,is,fut-1]))                                                       ### number of 5-year old survivors
+            N6.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round((N5.f[ncr,is,fut-1]+N6.f[ncr,is,fut-1])))                                   ### number of 6-year or older (adult) birds
             Nterr.f[ncr,is,fut] <- round((N4.f[ncr,is,fut] * 0.024) + (N5.f[ncr,is,fut] * 0.124) + (N6.f[ncr,is,fut]))
 
 
@@ -851,10 +851,12 @@ INPUT <- list(y.terrvis = y.terrvis,
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
               PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
-              scen.capt.release=16,
-              scen.imp.surv=6,
-              capt.release=seq(0,15,1),
-              imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
+              scen.capt.release=ncol(capt.rel.mat),
+              scen.imp.surv=ncol(surv.inc.mat),
+              #capt.release=seq(0,15,1),
+              #imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
+              capt.release=capt.rel.mat,
+              imp.surv=surv.inc.mat)
 
 
 
@@ -963,7 +965,7 @@ NeoIPMeggredRescue <- jags(data=INPUT,
 NeoIPM.ALL <- jags(data=INPUT,
                    inits=initIPM,
                    parameters.to.save=paraIPM,
-                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_COMBINED.jags",
+                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_ExtendedProjection.jags",    ## was EGVU_IPM_2019_COMBINED.jags
                    n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
@@ -974,6 +976,11 @@ NeoIPM.RED <- jags(data=INPUT,
                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 
+
+
+
+
+
 NeoIPMi$samples
 
 save.image("EGVU_IPM_output2019_v3.RData")
@@ -981,6 +988,8 @@ save.image("EGVU_IPM_output2019_v3.RData")
 
 
   
+
+
   
   
   
