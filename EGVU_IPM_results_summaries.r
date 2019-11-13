@@ -19,6 +19,9 @@
 ## inconsistency in model output: resolved definition of extinction probability
 ## changed baseline graph to output from multi-scenario model
 
+## CHANGED MODEL IN SEPT 2019 to INCLUDE MORE CHICKS RELEASED AND FEWER SURVIVAL INCREASE SCENARIOS
+## significant complication to extract correct output as indices now have either 1 or 2 characters
+
 library(tidyverse)
 library(ggplot2)
 library(data.table)
@@ -57,17 +60,17 @@ breedinput<- breed %>% filter(Year>2005) %>%
 # IMPORT THE MODEL OUTPUT
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
-load("EGVU_IPM_output2019_v2.RData")
+load("EGVU_IPM_output2019_v3.RData")
 out<-as.data.frame(NeoIPM.ALL$summary)  ## changed from NeoIPMbasic
 out$parameter<-row.names(NeoIPM.ALL$summary) ## changed from NeoIPMbasic
 #write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
 
-out<-as.data.frame(NeoIPMeggredNoRescue$summary)
-out$parameter<-row.names(NeoIPMeggredNoRescue$summary)
-#write.table(out,"EGVU_IPM_future_v2.csv", sep=",", row.names=F)
-
-out<-as.data.frame(NeoIPMeggredRescue$summary)
-out$parameter<-row.names(NeoIPMeggredRescue$summary)
+# out<-as.data.frame(NeoIPMeggredNoRescue$summary)
+# out$parameter<-row.names(NeoIPMeggredNoRescue$summary)
+# #write.table(out,"EGVU_IPM_future_v2.csv", sep=",", row.names=F)
+# 
+# out<-as.data.frame(NeoIPMeggredRescue$summary)
+# out$parameter<-row.names(NeoIPMeggredRescue$summary)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -98,8 +101,8 @@ for (c in 2:nc){
 }
 
 ## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
 
 FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   group_by(parm) %>%
@@ -122,16 +125,20 @@ out$parameter<-row.names(NeoIPM.ALL$summary) ## changed from NeoIPMbasic
 
 ## retrieve the population projections
 EV.fut<-out[(grep("Nterr",out$parameter)),c(12,5,3,7)] %>%
-  mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=4*7)))
+  mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=16*6)))
 names(EV.fut)[1:4]<-c('parm','median','lcl','ucl')
 
 ## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
 EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
-EV.fut$capt.release[grep(",",EV.fut$parm)]<-capt.release[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],9,9))]
-EV.fut$imp.surv[grep(",",EV.fut$parm)]<-imp.surv[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],11,11))]
-EV.fut <- EV.fut %>% filter(capt.release==0 & imp.surv<1.0001)
+EV.fut$capt.release<-capt.release[as.numeric(substr(EV.fut$parm,regexpr("\\[",EV.fut$parm)+1,regexpr(",",EV.fut$parm)-1))]
+EV.fut$imp.surv<-imp.surv[as.numeric(substr(EV.fut$parm,regexpr(",",EV.fut$parm)+1,regexpr(",",EV.fut$parm)+1))]
+
+EV.base <- EV.fut %>% 
+  mutate(capt.release=ifelse(Year<2019,0,capt.release)) %>%
+  mutate(imp.surv=ifelse(Year<2019,0,imp.surv)) %>%
+           filter(capt.release==0 & imp.surv<1.0001)
 
 ### produce plot FOR BASELINE TRAJECTORY
 
@@ -139,8 +146,8 @@ EV.fut <- EV.fut %>% filter(capt.release==0 & imp.surv<1.0001)
 #jpeg("EV_population_projection_BASELINE.jpg", width=9, height=6, units="in", res=600, quality=100)
 
 ggplot()+
-  geom_line(data=EV.fut, aes(x=Year, y=median), color="cornflowerblue",size=1)+
-  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_line(data=EV.base, aes(x=Year, y=median), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.base,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
   geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
 
   ## format axis ticks
@@ -148,12 +155,12 @@ ggplot()+
   scale_x_continuous(name="Year", breaks=seq(2006,2068,5), labels=as.character(seq(2006,2068,5)))+
   
   ## ADD LINES FOR EXTINCTION
-  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
-  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$median<5))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<5))],linetype='dashed', size=1,colour="firebrick")+
   
   ## ADD LABELS FOR EXTINCTION
-  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$lcl<5))],label=paste("5% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))])), size=5, colour="firebrick", hjust=1)+
-  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$median<5))],label=paste("50% probability \n in ",xintercept=EV.fut$Year[min(which(EV.fut$median<5))])), size=5, colour="firebrick", hjust=0)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<5))],label=paste("5% probability \n in ",xintercept=EV.fut$Year[min(which(EV.base$lcl<5))])), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<5))],label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<5))])), size=5, colour="firebrick", hjust=0)+
   
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -164,6 +171,83 @@ ggplot()+
         strip.background=element_rect(fill="white", colour="black"))
 
 dev.off()
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GRAPH 1B: PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+out<-as.data.frame(NeoIPM.ALL$summary)  ## changed from NeoIPMbasic
+out$parameter<-row.names(NeoIPM.ALL$summary) ## changed from NeoIPMbasic
+
+## retrieve the population projections
+EV.fut<-out[(grep("Nterr",out$parameter)),c(12,5,3,7)] %>%
+  mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=16*6)))
+names(EV.fut)[1:4]<-c('parm','median','lcl','ucl')
+
+## give the projections proper scenario labels
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
+EV.fut$capt.release<-capt.release[as.numeric(substr(EV.fut$parm,regexpr("\\[",EV.fut$parm)+1,regexpr(",",EV.fut$parm)-1))]
+EV.fut$imp.surv<-imp.surv[as.numeric(substr(EV.fut$parm,regexpr(",",EV.fut$parm)+1,regexpr(",",EV.fut$parm)+1))]
+
+
+EV.fut<-EV.fut %>% mutate(capt.release=ifelse(Year<2019,0,capt.release)) %>%
+  mutate(imp.surv=ifelse(Year<2019,0,imp.surv)) %>%
+  mutate(imp.surv=ifelse(imp.surv>1,paste("+",as.integer((imp.surv-1)*100),"%"),"none")) %>%
+  arrange(imp.surv,capt.release,Year) %>%
+  filter(Year>2018) %>%
+  filter(Year<2050)
+
+## CONVERT TO FACTORS FOR PLOTTING
+EV.fut$imp.surv <- factor(EV.fut$imp.surv, levels = c("+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+EV.fut$capt.release <- factor(EV.fut$capt.release)
+
+
+## CREATE A COLOUR PALETTE FOR THE NUMBER OF CHICKS RELEASED
+colfunc <- colorRampPalette(c("darkgrey", "indianred"))
+colfunc(16)
+
+### produce plot with 6 panels and multiple lines per year
+
+#pdf("EV_population_projection_C3.pdf", width=10, height=7)
+#postscript("Fig1_Balkan.eps", width=9, height=6)
+#jpeg("Fig1_Balkan.jpg", width=9, height=6, units="in", res=600, quality=100)
+#par(oma=c(0,0,0,0),mar=c(4.2,4.5,0,0.5), cex=1.2)
+ggplot()+
+  geom_line(data=EV.fut, aes(x=Year, y=median, color=capt.release), size=1)+
+  #geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl, fill=capt.release),alpha=0.2)+
+  #geom_line(data=trendinput, aes(x=year, y=N), size=1,col='cornflowerblue')+
+  facet_wrap(~imp.surv,ncol=3) +
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,200),breaks=seq(0,200,50), labels=as.character(seq(0,200,50)))+
+  scale_x_continuous(name="Year", breaks=seq(2019,2049,5), labels=as.character(seq(2019,2049,5)))+
+  guides(color=guide_legend(title="N chicks \n released"))+
+  #scale_color_brewer()
+  scale_colour_manual(palette=colfunc)+ ### for reasons I cannot understand this line is ignored completely
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=14, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18),
+        legend.text=element_text(size=14, color="black"),
+        legend.title=element_text(size=14, color="black"),
+        legend.key = element_rect(fill = NA),
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+dev.off()
+
+
+
+## specify what survival should be for stable population
+mean(out[(grep("surv",out$parameter)),1])*1.06
+mean(out[(grep("surv",out$parameter)),1])*1.08
 
 
 
@@ -184,8 +268,8 @@ EV.fut.chick<-out[(grep("Nterr",out$parameter)),c(12,5,3,7)] %>%
 names(EV.fut.chick)[1:4]<-c('parm','median','lcl','ucl')
 
 ## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
 EV.fut.chick <- EV.fut.chick %>% mutate(capt.release=0, imp.surv=0)
 EV.fut.chick$capt.release[grep(",",EV.fut.chick$parm)]<-capt.release[as.numeric(substr(EV.fut.chick$parm[grep(",",EV.fut.chick$parm)],9,9))]
 EV.fut.chick$imp.surv[grep(",",EV.fut.chick$parm)]<-imp.surv[as.numeric(substr(EV.fut.chick$parm[grep(",",EV.fut.chick$parm)],11,11))]
@@ -302,70 +386,89 @@ extprop %>% filter(imp.surv=="no improvement") %>%
   filter(Year>2040)
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## retrieve the population projections
-EV.fut<-out[(grep("Nterr",out$parameter)),c(12,1,3,7)] %>%
-  mutate(Year=c(trendinput$year,rep(seq(2019,2048,1),each=4*7)))
-names(EV.fut)[1:4]<-c('parm','mean','lcl','ucl')
 
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GRAPH 4: PLOT FUT POP GROWTH AGAINST NUMBER OF RELEASED CHICKS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+samplesout<-as.data.frame(rbind(NeoIPM.ALL$samples[[1]],NeoIPM.ALL$samples[[2]],NeoIPM.ALL$samples[[3]],NeoIPM.ALL$samples[[4]]))
+head(samplesout)
+
+allsamp <- samplesout %>% gather(key="parm", value="value") %>%
+  filter(grepl("fut.lambda",parm)) %>%
+  mutate(capt.release=0, imp.surv=0)
+
+
+### EXTRACT PROPER SCENARIOS WITH PATTERN MATCHING
 ## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
 
-EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
-EV.fut$capt.release[grep(",",EV.fut$parm)]<-capt.release[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],9,9))]
-EV.fut$imp.surv[grep(",",EV.fut$parm)]<-imp.surv[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],11,11))]
-EV.fut$imp.surv <- ifelse(EV.fut$imp.surv>1,paste("+",as.integer((EV.fut$imp.surv-1)*100),"%"),"none")
 
-EV.fut[20:30,]  
-
-## add past trajectory for the four capt.release scenarios
-EV.fut<-rbind(EV.fut,(EV.fut %>% filter(Year<2019) %>% mutate(capt.release=2)),
-              (EV.fut %>% filter(Year<2019) %>% mutate(capt.release=4)),
-              (EV.fut %>% filter(Year<2019) %>% mutate(capt.release=6)))
+# res<-str_match(allsamp$parm,"lambda (.*?) ,")
+# gsub(".*[[] (.+) [,].*", "\\1", "fut.lambda[1,1]")
+# str_extract("fut.lambda[1,1]", perl=("(?<=[)(.+)(?=\\,)"))
+# as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)[1]+1,regexpr(",",allsamp$parm)[1]-1))
+#imp.surv[as.numeric(substr("fut.lambda[10,1]",regexpr(",","fut.lambda[10,1]")+1,regexpr("]","fut.lambda[10,1]")-1))]
+allsamp$capt.release<-capt.release[as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)+1,regexpr(",",allsamp$parm)-1))]
+allsamp$imp.surv<-imp.surv[as.numeric(substr(allsamp$parm,regexpr(",",allsamp$parm)+1,regexpr("]",allsamp$parm)-1))]
+allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
 
 ## create factors for plot labels and order them appropriately
-EV.fut$capt.release <- ifelse(EV.fut$capt.release>1,paste("+",EV.fut$capt.release,"chicks/year"),"no captive releases")
-EV.fut$capt.release <- factor(EV.fut$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-EV.fut$imp.surv <- factor(EV.fut$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+#allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
+#allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+head(allsamp)
 
 
+#### summarise all samples to show median and 95% credible interval
+futrate.sum<- allsamp %>% filter(value!=0) %>%
+  group_by(parm,capt.release,imp.surv) %>%
+  summarise(median=median(value), lcl=quantile(value,0.025), ucl=quantile(value,0.975))
 
-### produce plot with 4 panels and multiple lines per year
+### CREATE PLOT ###
+pdf("EV_fut_growth_rate_capt_release.pdf", width=10, height=7)
+ggplot(futrate.sum)+
+  geom_hline(aes(yintercept=1), color='red', size=1)+
+  geom_line(aes(x=capt.release,y=median),size=1)+
+  geom_ribbon(aes(x=capt.release, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_line(aes(x=capt.release,y=lcl),size=0.5,color="darkgrey")+
+  geom_line(aes(x=capt.release,y=ucl),size=0.5,color="darkgrey")+
+  facet_wrap(~imp.surv,ncol=3) +
 
-#pdf("EV_population_projection_C3.pdf", width=10, height=7)
-#postscript("Fig1_Balkan.eps", width=9, height=6)
-#jpeg("Fig1_Balkan.jpg", width=9, height=6, units="in", res=600, quality=100)
-#par(oma=c(0,0,0,0),mar=c(4.2,4.5,0,0.5), cex=1.2)
-ggplot()+
-  geom_line(data=EV.fut, aes(x=Year, y=mean, color=imp.surv), size=1)+
-  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl, fill=imp.surv),alpha=0.2)+
-  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkgrey')+
-  facet_wrap(~capt.release,ncol=2) +
-  
-  ## format axis ticks
-  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,300),breaks=seq(0,300,50), labels=as.character(seq(0,300,50)))+
-  scale_x_continuous(name="Year", breaks=seq(2006,2048,5), labels=as.character(seq(2006,2048,5)))+
-  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
-  
-  ## beautification of the axes
-  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=18, color="black"),
-        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+  ylab("Future population growth rate") +
+  xlab("Number of chicks released per year") +
+  theme(panel.background=element_rect(fill="white", colour="black"), 
+        axis.text.y=element_text(size=16, color="black"),
+        axis.text.x=element_text(size=16, color="black", vjust=0.5), 
         axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=18, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"))
+        strip.text.x=element_text(size=16, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_blank())
 
 dev.off()
 
 
 
-## specify what survival should be for stable population
-mean(out[(grep("surv",out$parameter)),1])*1.06
-mean(out[(grep("surv",out$parameter)),1])*1.08
+
+### quantify what number of individuals is needed to achieve positive growth rate
+
+futrate.sum %>% filter(median>0.9999) %>%
+  group_by(imp.surv) %>%
+  summarise(min=min(capt.release))
+
+futrate.sum %>% filter(lcl>0.9999) %>%
+  group_by(imp.surv) %>%
+  summarise(min=min(capt.release))
+
+futrate.sum %>% filter(ucl>0.9999) %>%
+  group_by(imp.surv) %>%
+  summarise(min=min(capt.release))
+
 
 
 
@@ -373,40 +476,50 @@ mean(out[(grep("surv",out$parameter)),1])*1.08
 # QUANTIFY PROPORTION OF SIMULATIONS (=PROBABILITY) THAT FUTURE LAMBDA IS POSITIVE 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-samplesout<-as.data.frame(rbind(NeoIPMeggred$samples[[1]],NeoIPMeggred$samples[[2]],NeoIPMeggred$samples[[3]]))
+samplesout<-as.data.frame(rbind(NeoIPM.ALL$samples[[1]],NeoIPM.ALL$samples[[2]],NeoIPM.ALL$samples[[3]],NeoIPM.ALL$samples[[4]]))
 head(samplesout)
-
-## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
 
 allsamp <- samplesout %>% gather(key="parm", value="value") %>%
   filter(grepl("fut.lambda",parm)) %>%
+  filter(value!=0) %>%
   mutate(capt.release=0, imp.surv=0)
 
-allsamp$capt.release[grep(",",allsamp$parm)]<-capt.release[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],12,12))]
-allsamp$imp.surv[grep(",",allsamp$parm)]<-imp.surv[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],14,14))]
+### EXTRACT PROPER SCENARIOS WITH PATTERN MATCHING
+## give the projections proper scenario labels
+capt.release=seq(0,15,1)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+
+
+# res<-str_match(allsamp$parm,"lambda (.*?) ,")
+# gsub(".*[[] (.+) [,].*", "\\1", "fut.lambda[1,1]")
+# str_extract("fut.lambda[1,1]", perl=("(?<=[)(.+)(?=\\,)"))
+# as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)[1]+1,regexpr(",",allsamp$parm)[1]-1))
+
+#imp.surv[as.numeric(substr("fut.lambda[10,1]",regexpr(",","fut.lambda[10,1]")+1,regexpr("]","fut.lambda[10,1]")-1))]
+
+allsamp$capt.release<-capt.release[as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)+1,regexpr(",",allsamp$parm)-1))]
+allsamp$imp.surv<-imp.surv[as.numeric(substr(allsamp$parm,regexpr(",",allsamp$parm)+1,regexpr("]",allsamp$parm)-1))]
 allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
 
 ## create factors for plot labels and order them appropriately
-allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
-allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+#allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
+#allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
+head(allsamp)
 
 
 ggplot(allsamp)+
-  #geom_point(aes(x=imp.surv,y=value, color=capt.release),size=0.5)+
-  geom_hline(aes(yintercept=1), color='red', size=2)+
-  geom_violin(aes(x=imp.surv,y=value)) +
+  geom_hline(aes(yintercept=1), color='red', size=1)+
+  geom_violin(aes(x=capt.release,y=value, color=capt.release)) +
   
-  facet_wrap(~capt.release,ncol=2) +
+  facet_wrap(~imp.surv,ncol=3) +
   
   ## format axis ticks
-  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
+  #guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
   
   
-  ylab("Future population trend") +
-  xlab("Improvement in survival probability") +
+  ylab("Future population growth rate") +
+  xlab("Number of chicks released per year") +
   theme(panel.background=element_rect(fill="white", colour="black"), 
         axis.text.y=element_text(size=16, color="black"),
         axis.text.x=element_text(size=16, color="black", vjust=0.5), 
@@ -416,7 +529,6 @@ ggplot(allsamp)+
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(), 
         panel.border = element_blank())
-
 
 
 
@@ -509,9 +621,79 @@ rmarkdown::render('S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\
 
 
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# PLOTS FOR PRESENTATION
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+ggplot()+
+  geom_line(data=EV.fut, aes(x=Year, y=median), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,130),breaks=seq(0,130,30), labels=as.character(seq(0,130,30)))+
+  scale_x_continuous(name="", breaks=seq(2005,2070,10), labels=as.character(seq(2005,2070,10)))+
+  
+  ## ADD LINES FOR EXTINCTION
+  geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
+
+  ## ADD LABELS FOR EXTINCTION
+  geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$lcl<5))]-2,label="5% risk \n of extinction"), size=6, colour="firebrick", hjust=1)+
+
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text=element_text(size=18, color="black"),
+        axis.title=element_text(size=18), 
+        strip.background=element_rect(fill="white", colour="black"))
 
 
 
 
+ggplot(data=extprop)+
+  geom_line(aes(x=Year, y=ext.prob, color=imp.surv), size=1.5)+
+  facet_wrap(~capt.release,ncol=2) +
+  
+  ## format axis ticks
+  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
+  scale_x_continuous(name="", breaks=seq(2025,2065,10), labels=as.character(seq(2025,2065,10)))+
+  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"),
+        panel.grid.major = element_line(colour="darkgrey"),
+        panel.grid.minor = element_blank(),
+        axis.text=element_text(size=18, color="black"),
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"),
+        legend.title = element_text(size=18, face="bold"),
+        legend.text = element_text(size=16))
 
 
+
+EVplot<- EV.fut %>% dplyr::filter(Year<2030) %>%
+  dplyr::filter(Year>2009) %>%
+  dplyr::filter(imp.surv %in% c("+ 10 %","+ 6 %","+ 2 %","none"))
+
+ggplot()+
+  geom_line(data=EVplot, aes(x=Year, y=mean, color=imp.surv), size=1)+
+  geom_ribbon(data=EVplot,aes(x=Year, ymin=lcl,ymax=ucl, fill=imp.surv),alpha=0.2)+
+  facet_wrap(~capt.release,ncol=2) +
+  
+  ## format axis ticks
+  scale_y_continuous(name="N Egyptian Vulture breeding pairs", limits=c(0,110),breaks=seq(0,100,20), labels=as.character(seq(0,100,20)))+
+  scale_x_continuous(name="", breaks=seq(2010,2030,5), labels=as.character(seq(2010,2030,5)))+
+  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"),
+        panel.grid.major = element_line(colour="darkgrey"),
+        panel.grid.minor = element_blank(),
+        axis.text=element_text(size=18, color="black"),
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"),
+        legend.title = element_text(size=18, face="bold"),
+        legend.text = element_text(size=16))
