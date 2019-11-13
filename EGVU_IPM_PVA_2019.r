@@ -713,6 +713,7 @@ for (tt in 2:T.count){
 # -------------------------------------------------
 ### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
 ### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
+### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
 
 
 
@@ -786,6 +787,32 @@ for (tt in 2:T.count){
 ",fill = TRUE)
 sink()
 
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE MATRIX OF RELEASE AND SURVIVAL SCENARIOS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+capt.release=seq(0,15,1)
+project.time=c(10,20,30)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+lag.time=c(5,10,15)
+PROJECTION.years<-seq(1,30,1)
+
+capt.rel.mat<- expand.grid(PROJECTION.years,capt.release,project.time) %>%
+  rename(Year=Var1,REL=Var2,DUR=Var3) %>%
+  mutate(scenario=paste(REL,DUR, sep="_")) %>%
+  mutate(REL=ifelse(Year>DUR,0,REL)) %>%
+  select(-DUR) %>%
+  spread(key=scenario, value=REL)
+
+
+surv.inc.mat<- expand.grid(PROJECTION.years,imp.surv,lag.time) %>%
+  rename(Year=Var1,SURV=Var2,LAG=Var3) %>%
+  mutate(scenario=paste(SURV,LAG, sep="_")) %>%
+  mutate(ann.offset=(SURV-1)/LAG) %>%
+  mutate(SURV=ifelse(Year<LAG,1+(Year*ann.offset),SURV)) %>%
+  select(-LAG,-ann.offset) %>%
+  spread(key=scenario, value=SURV)
 
 
 
