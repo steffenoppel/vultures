@@ -26,7 +26,18 @@
 ## MAJOR UPDATE 26 July 2019: include egg reduction to harvest second eggs
 ## calculate fecundity when only 1 egg available (reduction from normal fecundity)
 ## add harvested eggs as additional juveniles to be released
-## updated 27 July 2019: fixed fecundity accordingly in scenarios 
+## updated 27 July 2019: fixed fecundity accordingly in scenarios
+
+## MAJOR UPDATE 18 September 2019
+## revised sequence of released chicks
+
+## MAJOR REVSION 13 NOVEMBER 2019
+## incorporated suggestions discussed at EVC in Albufeira in October 2019
+## increase number of released chicks to 15 per year
+## include releases for 10,20, and 30 years
+## include gradual improvement of survival (not immediate improvement) over next 5 years
+
+### NEED TO DO: INCLUDE DATA FROM 2019
 
 
 library(readxl)
@@ -812,11 +823,11 @@ INPUT <- list(y.terrvis = y.terrvis,
               x.telemetry = x.telemetry,
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
-              PROJECTION=50,
-              scen.capt.release=4,
-              scen.imp.surv=7,
-              capt.release=c(0,2,4,6),
-              imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12))
+              PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
+              scen.capt.release=16,
+              scen.imp.surv=6,
+              capt.release=seq(0,15,1),
+              imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
 
 
 
@@ -900,356 +911,48 @@ ni <- 50000
 nb <- 10000
 
 
-# RUN THE MODEL ALLOWING FOR RANDOM ERRORS
-
-# rm(NeoIPMi)
-# for (i in 1:50){
-#   try(
+### THIS MODEL SIMPLY EXPLORES THE NO CHANGE SCENARIO AND QUANTIFIES FUTURE POPULATION TREND IF NOTHING IS DONE
 NeoIPMbasic <- jags(data=INPUT,
                 inits=initIPM,
                 parameters.to.save=paraIPM,
                 model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
-  
+
+### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
 NeoIPMeggredNoRescue <- jags(data=INPUT,
                        inits=initIPM,
                        parameters.to.save=paraIPM,
                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
                        n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
+### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
 NeoIPMeggredRescue <- jags(data=INPUT,
                     inits=initIPM,
                     parameters.to.save=paraIPM,
                     model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
+### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
 NeoIPM.ALL <- jags(data=INPUT,
+                   inits=initIPM,
+                   parameters.to.save=paraIPM,
+                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_COMBINED.jags",
+                   n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+
+### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
+NeoIPM.RED <- jags(data=INPUT,
                            inits=initIPM,
                            parameters.to.save=paraIPM,
-                           model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_COMBINED.jags",
+                           model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_REDRELEASE.jags",
                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
-# , silent=T)
-# if("NeoIPMi" %in% ls())break
-# }
-
 
 NeoIPMi$samples
 
-save.image("EGVU_IPM_output2019_v2.RData")
+save.image("EGVU_IPM_output2019_v3.RData")
 
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# EXPORT THE OUTPUT
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
-#load("EGVU_IPM_output2019_chicks.RData")
-out<-as.data.frame(NeoIPMi$summary)
-out$parameter<-row.names(NeoIPMi$summary)
-#write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
-
-out<-as.data.frame(NeoIPMeggred$summary)
-out$parameter<-row.names(NeoIPMeggred$summary)
-#write.table(out,"EGVU_IPM_future_v2.csv", sep=",", row.names=F)
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# CREATE OUTPUT TABLE FOR REPORT /MANUSCRIPT
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-head(out)
-
-TABLE1<-out %>% filter(parameter %in% c('mean.lambda','ann.phi.juv.telemetry','ann.phi.sec.telemetry','ann.phi.third.telemetry','mu.fec')) %>%
-  select(parameter,c(5,3,7))
-
-
-## retrieve the adult survival estimates averaged across all years
-selcol<-grep("ann.surv.terrvis",dimnames(NeoIPMeggred$samples[[1]])[[2]])
-ann.surv.terrvis<-numeric()
-for (c in 1:nc){
-  ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(NeoIPMeggred$samples[[c]][,selcol]))
-}
-
-TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
-#write.table(TABLE1,"clipboard", sep="\t", row.names=F)
-
-
-## retrieve the future lambdas
-selcol<-grep("fut.lambda",dimnames(NeoIPMeggred$samples[[1]])[[2]])
-fut.lambda<-NeoIPMeggred$samples[[1]][,selcol]
-for (c in 2:nc){
-  fut.lambda<-rbind(fut.lambda,NeoIPMeggred$samples[[c]][,selcol])
-}
-
-## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
-
-FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
-  group_by(parm) %>%
-  summarise(median=quantile(f.lam,0.5),lcl=quantile(f.lam,0.025),ucl=quantile(f.lam,0.975)) %>%
-  mutate(capt.release=0, imp.surv=0) 
-FUTLAM$capt.release[grep(",",FUTLAM$parm)]<-capt.release[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],12,12))]
-FUTLAM$imp.surv[grep(",",FUTLAM$parm)]<-imp.surv[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],14,14))]
-FUTLAM$imp.surv <- ifelse(FUTLAM$imp.surv>1,paste("+",as.integer((FUTLAM$imp.surv-1)*100),"%"),"none")
-FUTLAM
-#write.table(FUTLAM[,c(1,5,6,2,3,4)],"clipboard", sep="\t", row.names=F)
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-## retrieve the population projections
-EV.fut<-out[(grep("Nterr",out$parameter)),c(12,1,3,7)] %>%
-  mutate(Year=c(trendinput$year,rep(seq(2019,2048,1),each=4*7)))
-names(EV.fut)[1:4]<-c('parm','mean','lcl','ucl')
-
-## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
-
-EV.fut <- EV.fut %>% mutate(capt.release=0, imp.surv=0)
-EV.fut$capt.release[grep(",",EV.fut$parm)]<-capt.release[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],9,9))]
-EV.fut$imp.surv[grep(",",EV.fut$parm)]<-imp.surv[as.numeric(substr(EV.fut$parm[grep(",",EV.fut$parm)],11,11))]
-EV.fut$imp.surv <- ifelse(EV.fut$imp.surv>1,paste("+",as.integer((EV.fut$imp.surv-1)*100),"%"),"none")
-              
-EV.fut[20:30,]  
-
-## add past trajectory for the four capt.release scenarios
-EV.fut<-rbind(EV.fut,(EV.fut %>% filter(Year<2019) %>% mutate(capt.release=2)),
-              (EV.fut %>% filter(Year<2019) %>% mutate(capt.release=4)),
-              (EV.fut %>% filter(Year<2019) %>% mutate(capt.release=6)))
-
-## create factors for plot labels and order them appropriately
-EV.fut$capt.release <- ifelse(EV.fut$capt.release>1,paste("+",EV.fut$capt.release,"chicks/year"),"no captive releases")
-EV.fut$capt.release <- factor(EV.fut$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-EV.fut$imp.surv <- factor(EV.fut$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
-
-
-
-### produce plot with 4 panels and multiple lines per year
-
-#pdf("EV_population_projection_C3.pdf", width=10, height=7)
-#postscript("Fig1_Balkan.eps", width=9, height=6)
-#jpeg("Fig1_Balkan.jpg", width=9, height=6, units="in", res=600, quality=100)
-#par(oma=c(0,0,0,0),mar=c(4.2,4.5,0,0.5), cex=1.2)
-ggplot()+
-  geom_line(data=EV.fut, aes(x=Year, y=mean, color=imp.surv), size=1)+
-  geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl, fill=imp.surv),alpha=0.2)+
-  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkgrey')+
-  facet_wrap(~capt.release,ncol=2) +
-  
-  ## format axis ticks
-  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,300),breaks=seq(0,300,50), labels=as.character(seq(0,300,50)))+
-  scale_x_continuous(name="Year", breaks=seq(2006,2048,5), labels=as.character(seq(2006,2048,5)))+
-  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
-  
-  ## beautification of the axes
-  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=18, color="black"),
-        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
-        axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=18, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"))
-
-dev.off()
-
-
-
-## specify what survival should be for stable population
-mean(out[(grep("surv",out$parameter)),1])*1.06
-mean(out[(grep("surv",out$parameter)),1])*1.08
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# QUANTIFY PROPORTION OF SIMULATIONS (=PROBABILITY) THAT FUTURE LAMBDA IS POSITIVE 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-samplesout<-as.data.frame(rbind(NeoIPMeggred$samples[[1]],NeoIPMeggred$samples[[2]],NeoIPMeggred$samples[[3]]))
-head(samplesout)
-
-## give the projections proper scenario labels
-capt.release=c(0,2,4,6)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.1,1.12)
-
-allsamp <- samplesout %>% gather(key="parm", value="value") %>%
-  filter(grepl("fut.lambda",parm)) %>%
-  mutate(capt.release=0, imp.surv=0)
-
-allsamp$capt.release[grep(",",allsamp$parm)]<-capt.release[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],12,12))]
-allsamp$imp.surv[grep(",",allsamp$parm)]<-imp.surv[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],14,14))]
-allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
-
-## create factors for plot labels and order them appropriately
-allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
-allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
-
-
-ggplot(allsamp)+
-  #geom_point(aes(x=imp.surv,y=value, color=capt.release),size=0.5)+
-  geom_hline(aes(yintercept=1), color='red', size=2)+
-  geom_violin(aes(x=imp.surv,y=value)) +
-  
-  facet_wrap(~capt.release,ncol=2) +
-  
-  ## format axis ticks
-  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
-  
-  
-  ylab("Future population trend") +
-  xlab("Improvement in survival probability") +
-  theme(panel.background=element_rect(fill="white", colour="black"), 
-        axis.text.y=element_text(size=16, color="black"),
-        axis.text.x=element_text(size=16, color="black", vjust=0.5), 
-        axis.title=element_text(size=16), 
-        strip.text.x=element_text(size=16, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"), 
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(), 
-        panel.border = element_blank())
-
-
-
-
-### quantify what proportion of simulations result in future lambda >1
-
-allsamp %>% select(capt.release,imp.surv,value) %>%
-  mutate(n=1, inc=ifelse(value>0.9999,1,0)) %>%
-  group_by(imp.surv,capt.release) %>%
-  summarise(prop.increase=sum(inc)/sum(n))
-
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# QUANTIFY PROPORTION OF SIMULATIONS (=PROBABILITY) THAT FUTURE LAMBDA IS POSITIVE 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-head(samplesout)
-allsamp <- samplesout %>% gather(key="parm", value="value") %>%
-  filter(grepl("Nterr.f",parm)) %>%
-  filter(grepl(",30]",parm)) %>%   ### only use final year
-  mutate(capt.release=0, imp.surv=0)
-
-allsamp$capt.release[grep(",",allsamp$parm)]<-capt.release[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],9,9))]
-allsamp$imp.surv[grep(",",allsamp$parm)]<-imp.surv[as.numeric(substr(allsamp$parm[grep(",",allsamp$parm)],11,11))]
-allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
-
-## create factors for plot labels and order them appropriately
-allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
-allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 12 %","+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
-
-
-
-### PLOT EXTINCTION RISK
-pdf("EV_extinction_risk2028.pdf", width=10, height=7)
-ggplot(allsamp)+
-  geom_hline(aes(yintercept=10), color='red', size=2)+
-  geom_violin(aes(x=imp.surv,y=value)) +
-  
-  facet_wrap(~capt.release,ncol=2) +
-  
-  ## format axis ticks
-  guides(color=guide_legend(title="Survival increase"),fill=guide_legend(title="Survival increase"))+
-  
-  
-  ylab("Population size in 2028") +
-  xlab("Improvement in survival probability") +
-  theme(panel.background=element_rect(fill="white", colour="black"), 
-        axis.text.y=element_text(size=16, color="black"),
-        axis.text.x=element_text(size=16, color="black", vjust=0.5), 
-        axis.title=element_text(size=16), 
-        strip.text.x=element_text(size=16, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"), 
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(), 
-        panel.border = element_blank())
-dev.off()
-
-### quantify what proportion of simulations result in future pop <10 birds (=extinct)
-
-ext.probs<-allsamp %>% select(capt.release,imp.surv,value) %>%
-  mutate(n=1, inc=ifelse(value<10,1,0)) %>%
-  group_by(imp.surv,capt.release) %>%
-  summarise(ext.prob=sum(inc)/sum(n)) %>%
-  arrange(desc(ext.prob))
-
-fwrite(ext.probs,"EGVU_extinction.prob_2028.csv")
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PLOT PROBABILITY OF EXTINCTION OVER TIME 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-head(samplesout)
-extprop <- samplesout %>% gather(key="parm", value="value") %>%
-  filter(grepl("Nterr.f",parm)) %>%
-  mutate(capt.release=as.numeric(substr(parm,9,9)), imp.surv=as.numeric(substr(parm,11,11)))  %>%
-  filter(imp.surv %in% c(1,2,3,4)) %>% ### reduce plotting options
-  mutate(Year=ifelse(nchar(parm)==14,substr(parm,13,13),substr(parm,13,14))) %>%
-  mutate(n=1, inc=ifelse(value<10,1,0)) %>%
-  group_by(imp.surv,capt.release,Year) %>%
-  summarise(ext.prob=sum(inc)/sum(n)) %>%
-  mutate(Year=as.numeric(Year)+2018) 
-
-
-## create factors for plot labels and order them appropriately
-extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
-
-
-
-### produce plot with 4 panels and multiple lines per year
-
-#pdf("EV_extinction_probability_C3.pdf", width=10, height=7)
-#postscript("Fig1_Balkan.eps", width=9, height=6)
-#jpeg("Fig1_Balkan.jpg", width=9, height=6, units="in", res=600, quality=100)
-#par(oma=c(0,0,0,0),mar=c(4.2,4.5,0,0.5), cex=1.2)
-ggplot(data=extprop)+
-  geom_line(aes(x=Year, y=ext.prob, color=capt.release), size=1)+
-  facet_wrap(~imp.surv,ncol=2) +
-  
-  ## format axis ticks
-  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,0.8),breaks=seq(0,0.8,0.2), labels=as.character(seq(0,80,20)))+
-  scale_x_continuous(name="Year", breaks=seq(2019,2048,5), labels=as.character(seq(2019,2048,5)))+
-  guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
-  
-  ## beautification of the axes
-  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=18, color="black"),
-        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
-        axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=18, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"))
-
-dev.off()
-
-
-
-  
-  
-  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # PRODUCE OUTPUT REPORT
-  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  library(markdown)
-  library(rmarkdown)
-  library(knitr)
-  
-  
-  ### create HTML report for overall summary report
-  Sys.setenv(RSTUDIO_PANDOC="C:/Program Files (x86)/RStudio/bin/pandoc")
-  
-  rmarkdown::render('S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\EGVU_CaptRelease.Rmd',
-                    output_file = "EGVU_pop_model_captive_breeding.html",
-                    output_dir = 'S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel')
-  
-  
-  
   
   
   
