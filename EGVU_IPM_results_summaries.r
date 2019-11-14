@@ -22,6 +22,8 @@
 ## CHANGED MODEL IN SEPT 2019 to INCLUDE MORE CHICKS RELEASED AND FEWER SURVIVAL INCREASE SCENARIOS
 ## significant complication to extract correct output as indices now have either 1 or 2 characters
 
+## MODIFIED ON 14 OCT 2019 after expanding projections
+
 library(tidyverse)
 library(ggplot2)
 library(data.table)
@@ -60,7 +62,7 @@ breedinput<- breed %>% filter(Year>2005) %>%
 # IMPORT THE MODEL OUTPUT
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
-load("EGVU_IPM_output2019_v3.RData")
+load("EGVU_IPM_output2019_v4.RData")
 out<-as.data.frame(NeoIPM.ALL$summary)  ## changed from NeoIPMbasic
 out$parameter<-row.names(NeoIPM.ALL$summary) ## changed from NeoIPMbasic
 #write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
@@ -83,10 +85,10 @@ TABLE1<-out %>% filter(parameter %in% c('mean.lambda','ann.phi.juv.telemetry','a
 
 
 ## retrieve the adult survival estimates averaged across all years
-selcol<-grep("ann.surv.terrvis",dimnames(NeoIPMeggred$samples[[1]])[[2]])
+selcol<-grep("ann.surv.terrvis",dimnames(NeoIPM.ALL$samples[[1]])[[2]])
 ann.surv.terrvis<-numeric()
 for (c in 1:nc){
-  ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(NeoIPMeggred$samples[[c]][,selcol]))
+  ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(NeoIPM.ALL$samples[[c]][,selcol]))
 }
 
 TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
@@ -94,25 +96,48 @@ TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.
 
 
 ## retrieve the future lambdas
-selcol<-grep("fut.lambda",dimnames(NeoIPMeggred$samples[[1]])[[2]])
-fut.lambda<-NeoIPMeggred$samples[[1]][,selcol]
+selcol<-grep("fut.lambda",dimnames(NeoIPM.ALL$samples[[1]])[[2]])
+fut.lambda<-NeoIPM.ALL$samples[[1]][,selcol]
 for (c in 2:nc){
-  fut.lambda<-rbind(fut.lambda,NeoIPMeggred$samples[[c]][,selcol])
+  fut.lambda<-rbind(fut.lambda,NeoIPM.ALL$samples[[c]][,selcol])
 }
 
+
+
 ## give the projections proper scenario labels
-capt.release=seq(0,15,1)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+## fut.lam[capt.release,surv.imp] - need to extract scenarios from those indices
+#capt.release=seq(0,15,1)
+#imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+dim(capt.rel.mat)
+head(surv.inc.mat)
+
+## MELT MATRICES TO RECREATE SCENARIOS FROM INDEX NUMBERS
+ncr.lu<-capt.rel.mat %>% gather(key=Scenario, value=n.released,-Year) %>%
+  filter(Year==1) %>%
+  separate(Scenario,sep="_",into=c("n.rel","n.years")) %>%
+  mutate(capt.index=seq_along(Year)) %>%
+  select(capt.index,n.rel,n.years)
+
+surv.lu<-surv.inc.mat %>% gather(key=Scenario, value=n.released,-Year) %>%
+  filter(Year==30) %>%
+  separate(Scenario,sep="_",into=c("surv.inc","lag.time")) %>%
+  mutate(surv.index=seq_along(Year)) %>%
+  select(surv.index,surv.inc,lag.time)
+
 
 FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   group_by(parm) %>%
   summarise(median=quantile(f.lam,0.5),lcl=quantile(f.lam,0.025),ucl=quantile(f.lam,0.975)) %>%
-  mutate(capt.release=0, imp.surv=0) 
-FUTLAM$capt.release[grep(",",FUTLAM$parm)]<-capt.release[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],12,12))]
-FUTLAM$imp.surv[grep(",",FUTLAM$parm)]<-imp.surv[as.numeric(substr(FUTLAM$parm[grep(",",FUTLAM$parm)],14,14))]
-FUTLAM$imp.surv <- ifelse(FUTLAM$imp.surv>1,paste("+",as.integer((FUTLAM$imp.surv-1)*100),"%"),"none")
+  mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+  mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%  
+  left_join(ncr.lu, by="capt.index") %>%
+  left_join(surv.lu, by="surv.index") %>%
+  #mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+  #select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
+  arrange(median)
+
 FUTLAM
-#write.table(FUTLAM[,c(1,5,6,2,3,4)],"clipboard", sep="\t", row.names=F)
+#fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios.csv")
 
 
 

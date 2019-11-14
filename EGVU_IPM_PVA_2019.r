@@ -851,12 +851,12 @@ INPUT <- list(y.terrvis = y.terrvis,
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
               PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
-              scen.capt.release=ncol(capt.rel.mat),
-              scen.imp.surv=ncol(surv.inc.mat),
+              scen.capt.release=ncol(capt.rel.mat)-1,
+              scen.imp.surv=ncol(surv.inc.mat)-1,
               #capt.release=seq(0,15,1),
               #imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
-              capt.release=capt.rel.mat,
-              imp.surv=surv.inc.mat)
+              capt.release=capt.rel.mat[,2:ncol(capt.rel.mat)],
+              imp.surv=surv.inc.mat[,2:ncol(surv.inc.mat)])
 
 
 
@@ -947,19 +947,19 @@ NeoIPMbasic <- jags(data=INPUT,
                 model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
-### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
-NeoIPMeggredNoRescue <- jags(data=INPUT,
-                       inits=initIPM,
-                       parameters.to.save=paraIPM,
-                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
-                       n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
+# NeoIPMeggredNoRescue <- jags(data=INPUT,
+#                        inits=initIPM,
+#                        parameters.to.save=paraIPM,
+#                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
+#                        n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
-### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
-NeoIPMeggredRescue <- jags(data=INPUT,
-                    inits=initIPM,
-                    parameters.to.save=paraIPM,
-                    model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
-                    n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
+# NeoIPMeggredRescue <- jags(data=INPUT,
+#                     inits=initIPM,
+#                     parameters.to.save=paraIPM,
+#                     model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
+#                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
 NeoIPM.ALL <- jags(data=INPUT,
@@ -968,22 +968,19 @@ NeoIPM.ALL <- jags(data=INPUT,
                    model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_ExtendedProjection.jags",    ## was EGVU_IPM_2019_COMBINED.jags
                    n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
-### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
-NeoIPM.RED <- jags(data=INPUT,
-                           inits=initIPM,
-                           parameters.to.save=paraIPM,
-                           model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_REDRELEASE.jags",
-                           n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
+# NeoIPM.RED <- jags(data=INPUT,
+#                            inits=initIPM,
+#                            parameters.to.save=paraIPM,
+#                            model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_REDRELEASE.jags",
+#                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
-
-
-
 
 
 
 NeoIPMi$samples
 
-save.image("EGVU_IPM_output2019_v3.RData")
+save.image("EGVU_IPM_output2019_v4.RData")
 
 
 
