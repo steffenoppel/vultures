@@ -103,9 +103,9 @@ try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
 load("RODBC_EGVU_telemetry_input.RData")
+head(birds)
 
-
-
+birds$Fledge_date[is.na(birds$Fledge_date)]<-birds$Tag_date[is.na(birds$Fledge_date)] ### fill in 'fledge' which equals tag date for wild non-juveniles
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -124,11 +124,13 @@ dim(timeseries)
 
 CH.telemetry<-birds %>%
   filter(Age %in% c("juv","2cal_year","3cal_year","4cal_year")) %>%                   ### changed in 2019 to include immatures caught in Ethiopia
-  select(Name,Tag_year, origin) %>% 
+  select(Name,Tag_year, Age,origin) %>% 
   filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
-  filter(origin=="wild")                    ### USE ONLY WILD JUVENILES
+  filter(origin=="wild")     %>%               ### USE ONLY WILD JUVENILES
+  arrange(Tag_year)
 
-CH.telemetry[,4:63]<-0									### NEEDS MANUAL ADJUSTMENT IF REPEATED FOR LONGER TIME SERIES
+CH.telemetry[,5:64]<-0									### NEEDS MANUAL ADJUSTMENT IF REPEATED FOR LONGER TIME SERIES
+x.telemetry<-as.matrix(CH.telemetry[,5:64]) ### create matrix with age progression
 
 
 
@@ -136,37 +138,46 @@ CH.telemetry[,4:63]<-0									### NEEDS MANUAL ADJUSTMENT IF REPEATED FOR LONGE
 ### THIS MAY REQUIRE A FIX IN THE FUTURE IF BIRDS THAT ARE STILL ALIVE HAVE NOT BEEN TAGGED > 4 YEARS AGO
 ### WOULD NEED FILLING WITH NA
 
+
 for(n in CH.telemetry$Name){
+  
+  ### extract locations and start and end dates for each bird
   xl<-locs[locs$Bird_ID==n,]
   mindate<-as.Date(birds$Fledge_date[birds$Name==n])
   mindate<-dplyr::if_else(is.na(mindate),as.Date(min(xl$Date)),mindate)
   if(n %in% c("Elodie", "Odiseas")){mindate<-mindate-15}
   if(is.na(birds$Stop_date[birds$Name==n])){maxdate<-as.Date(max(xl$Date))}else{			### for birds that are still alive
-    maxdate<-as.Date(birds$Stop_date[birds$Name==n])}
+  maxdate<-as.Date(birds$Stop_date[birds$Name==n])}
   birdseries<-data.frame(date=seq(mindate, maxdate, "1 month"), live=1)
-  stopcol<-length(birdseries$live)+3
-  stopcol<-ifelse(stopcol>63,63,stopcol)
-  CH.telemetry[CH.telemetry$Name==n,4:stopcol]<-birdseries$live
+  stopcol<-length(birdseries$live)+4
+  stopcol<-ifelse(stopcol>64,64,stopcol)
+  CH.telemetry[CH.telemetry$Name==n,5:stopcol]<-birdseries$live[1:(stopcol-4)]
+  
+  ### adjust end for birds not tagged>5 years ago
+  if(stopcol<64){
+    if(birds$Status[birds$Name==n]=="Alive"){
+      CH.telemetry[CH.telemetry$Name==n,(stopcol+1):64]<-NA    ### set to NA because these occasions are in the future
+    }
+  } 
+  
+  ## find age of bird ##
+  xage<-CH.telemetry$Age[CH.telemetry$Name==n]
+  xage<-ifelse(xage=="juv",1,as.numeric(str_extract_all(xage,"\\(?[0-9]+\\)?", simplify=TRUE)))
+
+  
+  ## create matrix of age progression
+  ## MIGRATION ENDS IN OCTOBER, so only 3 occ (Aug, Sept, Oct) in high risk category - extended to 5 months in 2019
+  ## survival assumed equal for first 5 months, then another 12 months, then until end
+  agechange1<-ifelse(xage==1,5,12)   ## define when bird switches to next age category
+  agechange2<-ifelse(xage==1,17,24)  ## define when bird switches to last (third age category)
+  
+  x.telemetry[CH.telemetry$Name==n,1:agechange1]<-as.numeric(min(xage,max(xage,3)))			## Set everything after the first occasion to age at marking, capped at 3
+  x.telemetry[CH.telemetry$Name==n,(agechange1+1):agechange2]<-as.numeric(min(xage+1,max(xage+1,3)))			## change to next age category, capped at 3
+  x.telemetry[CH.telemetry$Name==n,(agechange2+1):60]<-as.numeric(max(xage+2,3))				## change to third and last age category, capped at 3
+
 }
 
-CH.telemetry<-CH.telemetry[order(CH.telemetry$Tag_year),]
-
-y.telemetry<-as.matrix(CH.telemetry[,4:63])
-
-
-##### CODE FOR FIRST AND and second years #######
-## MIGRATION ENDS IN OCTOBER, so only 3 occ (Aug, Sept, Oct) in high risk category
-
-x.telemetry<-y.telemetry
-for (l in 1: nrow(x.telemetry)){
-  n1 <- min(which(x.telemetry[l,]==1)) 		## find the first marking occasion
-  if(n1>1){x.telemetry[l,1:(n1-1)]<-NA}		## set everything before the first occasion to NA
-  x.telemetry[l,(n1):dim(x.telemetry)[2]]<-1			## Set everything after the first occasion to age = 1
-  nmax <- n1+3		 		## ensure that age=2 is within study period 						$$$ CHANGE HERE IF DIFF TIME INTERVAL REQUIRED $$$
-  x.telemetry[l,4:24]<-2				## since all birds start at the same time, age switches to 2 after 6 months	$$$ CHANGE HERE IF DIFF TIME INTERVAL REQUIRED $$$
-  x.telemetry[l,25:60]<-3				## since all birds start at the same time, age switches to 2 after 6 months	$$$ CHANGE HERE IF DIFF TIME INTERVAL REQUIRED $$$
-}
-x.telemetry<-as.matrix(x.telemetry)
+y.telemetry<-as.matrix(CH.telemetry[,5:64])
 str(x.telemetry)
 
 
@@ -192,10 +203,6 @@ z.telemetry<-as.matrix(z.telemetry)
 #### create vector of first marking (this is 1 by default)
 get.first.telemetry<-function(x)min(which(x!=0))
 f.telemetry<-apply(y.telemetry,1,get.first.telemetry)
-
-## for reporting - indicate months of death for juveniles
-get.last.telemetry<-function(x)min(which(x==0))
-hist(apply(y.telemetry,1,get.last.telemetry))
 
 
 #### Bundle data FOR JAGS MODEL RUN and save workspace
@@ -231,11 +238,9 @@ ch.init <- function(ch, f){
 # LOAD AND MANIPULATE TERRITORY MONITORING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_surveys.r")), wait = TRUE, invisible = FALSE)
+system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_surveys.r")), wait = TRUE, invisible = FALSE)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
-
 load("RODBC_EGVU_surveys.RData")
 
 
