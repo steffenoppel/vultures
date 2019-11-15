@@ -54,7 +54,7 @@ select<-dplyr::select
 # LOAD AND MANIPULATE POPULATION MONITORING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE)
+system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 load("EGVU_poptrend_input.RData")
@@ -64,28 +64,36 @@ head(breed)
 trendinput<- occu %>% filter(year>2005) %>%
   filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
   group_by(year) %>%
-  summarise(N=sum(occupancy))
+  summarise(N=sum(occupancy), R=sum(breeding, na.rm=T), J=sum(fledglings, na.rm=T))
 
 
 breedinput<- breed %>% filter(Year>2005) %>%
+  rename(year=Year) %>%
+  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
   filter(!is.na(breed_success)) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
   mutate(count=1) %>%
   mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
-  group_by(Year) %>%
+  group_by(year) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
 
 ### MODIFY BREEDINPUT FOR EGG HARVEST ###
 
 breedinput1EGG<- breed %>% filter(Year>2005) %>%
+  rename(year=Year) %>%
+  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
   filter(!is.na(breed_success)) %>%
   mutate(count=1) %>%
   mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
   mutate(fledglings=ifelse(fledglings==2,1,fledglings)) %>%     ### remove the second egg and fledgling
-  group_by(Year) %>%
+  group_by(year) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
 breedinput$J-breedinput1EGG$J
+
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
@@ -93,7 +101,7 @@ breedinput$J-breedinput1EGG$J
 
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
-#system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
+system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
 load("RODBC_EGVU_telemetry_input.RData")
 
 
@@ -115,7 +123,7 @@ dim(timeseries)
 ### CREATE A BLANK CAPTURE HISTORY for 5 years (60 months) for juvenile birds ###
 
 CH.telemetry<-birds %>%
-  filter(Age=="juv") %>%
+  filter(Age %in% c("juv","2cal_year","3cal_year","4cal_year")) %>%                   ### changed in 2019 to include immatures caught in Ethiopia
   select(Name,Tag_year, origin) %>% 
   filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
   filter(origin=="wild")                    ### USE ONLY WILD JUVENILES
