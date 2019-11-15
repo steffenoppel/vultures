@@ -242,31 +242,33 @@ system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFF
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 load("RODBC_EGVU_surveys.RData")
-
+head(EGVU)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD DATA FROM MACEDONIA AND MERGE WITH BG DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#EGVUm<-read_excel("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Raw_Data\\archived_databases\\ReturnNeophron\\C4_C5\\Macedonia_mgmt.xlsx", sheet = "Survival")
-EGVUm<-read_excel("C:\\STEFFEN\\RSPB\\Bulgaria\\Raw_Data\\archived_databases\\ReturnNeophron\\C4_C5\\Macedonia_mgmt.xlsx", sheet = "Survival")
+### OBSOLETE AS OF 15 NOV because data imported into project database
 
-head(EGVUm)
-EGVUm$visit_duration<-as.numeric(difftime(EGVUm$time_end,EGVUm$time_start, units = "hours"))
-EGVUm$visit_duration[is.na(EGVUm$visit_duration)]<-mean(EGVUm$visit_duration,na.rm=T)
-
-### filter the territories that have very few visits
-EGVUm$Year<-as.numeric(format(EGVUm$date, format="%Y"))
-EGVUm$terryear<-paste(EGVUm$Year,EGVUm$territory_name, sep="_")
-mgmtMAC<-aggregate(count~Country+territory_name+Year+terryear, data=EGVUm, FUN=sum)
-shit<-subset(mgmtMAC, count<2)
-
-### remove the worthless surveys from the main table
-EGVUm<-EGVUm[!(EGVUm$terryear %in% shit$terryear),] %>%
-  mutate(STAGE=NA, STATUS=NA,failure_reason=NA,n_chicks=0,n_other=0,nest_ID=NA) %>%  ## insert the columns needed to join data
-  select(names(EGVU))
-
-EGVU<-rbind(EGVU,EGVUm)
+# #EGVUm<-read_excel("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Raw_Data\\archived_databases\\ReturnNeophron\\C4_C5\\Macedonia_mgmt.xlsx", sheet = "Survival")
+# EGVUm<-read_excel("C:\\STEFFEN\\RSPB\\Bulgaria\\Raw_Data\\archived_databases\\ReturnNeophron\\C4_C5\\Macedonia_mgmt.xlsx", sheet = "Survival")
+# 
+# head(EGVUm)
+# EGVUm$visit_duration<-as.numeric(difftime(EGVUm$time_end,EGVUm$time_start, units = "hours"))
+# EGVUm$visit_duration[is.na(EGVUm$visit_duration)]<-mean(EGVUm$visit_duration,na.rm=T)
+# 
+# ### filter the territories that have very few visits
+# EGVUm$Year<-as.numeric(format(EGVUm$date, format="%Y"))
+# EGVUm$terryear<-paste(EGVUm$Year,EGVUm$territory_name, sep="_")
+# mgmtMAC<-aggregate(count~Country+territory_name+Year+terryear, data=EGVUm, FUN=sum)
+# shit<-subset(mgmtMAC, count<2)
+# 
+# ### remove the worthless surveys from the main table
+# EGVUm<-EGVUm[!(EGVUm$terryear %in% shit$terryear),] %>%
+#   mutate(STAGE=NA, STATUS=NA,failure_reason=NA,n_chicks=0,n_other=0,nest_ID=NA,GlobalID=NA) %>%  ## insert the columns needed to join data
+#   select(names(EGVU))
+# 
+# EGVU<-rbind(EGVU,EGVUm)
 dim(EGVU)
 
 
