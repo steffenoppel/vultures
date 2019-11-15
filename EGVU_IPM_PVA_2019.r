@@ -171,9 +171,9 @@ for(n in CH.telemetry$Name){
   agechange1<-ifelse(xage==1,5,12)   ## define when bird switches to next age category
   agechange2<-ifelse(xage==1,17,24)  ## define when bird switches to last (third age category)
   
-  x.telemetry[CH.telemetry$Name==n,1:agechange1]<-as.numeric(min(xage,max(xage,3)))			## Set everything after the first occasion to age at marking, capped at 3
-  x.telemetry[CH.telemetry$Name==n,(agechange1+1):agechange2]<-as.numeric(min(xage+1,max(xage+1,3)))			## change to next age category, capped at 3
-  x.telemetry[CH.telemetry$Name==n,(agechange2+1):60]<-as.numeric(max(xage+2,3))				## change to third and last age category, capped at 3
+  x.telemetry[CH.telemetry$Name==n,1:agechange1]<-as.numeric(min(xage,3))			## Set everything after the first occasion to age at marking, capped at 3
+  x.telemetry[CH.telemetry$Name==n,(agechange1+1):agechange2]<-as.numeric(min(xage+1,3))		## change to next age category, capped at 3
+  x.telemetry[CH.telemetry$Name==n,(agechange2+1):60]<-as.numeric(min(xage+2,3))				## change to third and last age category, capped at 3
 
 }
 
@@ -956,11 +956,11 @@ nb <- 10000
 
 
 ### THIS MODEL SIMPLY EXPLORES THE NO CHANGE SCENARIO AND QUANTIFIES FUTURE POPULATION TREND IF NOTHING IS DONE
-NeoIPMbasic <- jags(data=INPUT,
-                inits=initIPM,
-                parameters.to.save=paraIPM,
-                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
-                n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+# NeoIPMbasic <- jags(data=INPUT,
+#                 inits=initIPM,
+#                 parameters.to.save=paraIPM,
+#                 model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
+#                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
 # NeoIPMeggredNoRescue <- jags(data=INPUT,
