@@ -46,14 +46,17 @@ head(breed)
 trendinput<- occu %>% filter(year>2005) %>%
   filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
   group_by(year) %>%
-  summarise(N=sum(occupancy))
+  summarise(N=sum(occupancy), R=sum(breeding, na.rm=T), J=sum(fledglings, na.rm=T))
 
 
 breedinput<- breed %>% filter(Year>2005) %>%
+  rename(year=Year) %>%
+  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
   filter(!is.na(breed_success)) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
   mutate(count=1) %>%
   mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
-  group_by(Year) %>%
+  group_by(year) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
 
@@ -132,12 +135,12 @@ FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%  
   left_join(ncr.lu, by="capt.index") %>%
   left_join(surv.lu, by="surv.index") %>%
-  #mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
-  #select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
+  mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+  select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
   arrange(median)
 
 FUTLAM
-#fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios.csv")
+fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios.csv")
 
 
 
