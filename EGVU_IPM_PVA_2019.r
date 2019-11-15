@@ -991,10 +991,6 @@ NeoIPM.ALL <- jags(data=INPUT,
 #                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 
-
-
-NeoIPMi$samples
-
 save.image("EGVU_IPM_output2019_v4.RData")
 
 
