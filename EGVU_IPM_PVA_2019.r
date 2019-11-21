@@ -876,8 +876,8 @@ INPUT <- list(y.terrvis = y.terrvis,
 
 
 ## Parameters to be estimated ('monitored') by JAGS
-paraIPM<-c("lambda.t","ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
-            "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","mu.fec","Nterr", "Nterr.f")
+paraIPM<-c("mu.fec","lambda.t","ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
+            "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
           
 
 
