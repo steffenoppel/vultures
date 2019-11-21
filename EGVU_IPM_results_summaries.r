@@ -104,8 +104,13 @@ for (c in 1:nc){
 TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
 names(TABLE1)<-c("Parameter","Median","lowerCL","upperCL")
 TABLE1$Parameter<-c("fecundity","first year survival","second year survival", "third year survival","population growth rate","adult survival")
-fwrite(FUTLAM,"EGVU_IPM_demographic_parameter_estimates.csv")
+fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates.csv")
 
+
+
+
+
+########## CREATE TABLE OF ALL FUTURE POPULATION GROWTH RATES ############################
 
 
 ## retrieve the future lambdas
@@ -117,8 +122,6 @@ for (c in 2:nc){
 
 
 
-########## CREATE TABLE OF ALL FUTURE POPULATION GROWTH RATES ############################
-
 FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   group_by(parm) %>%
   summarise(median=quantile(f.lam,0.5),lcl=quantile(f.lam,0.025),ucl=quantile(f.lam,0.975)) %>%
@@ -127,7 +130,7 @@ FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   left_join(ncr.lu, by="capt.index") %>%
   left_join(surv.lu, by="surv.index") %>%
   mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
-  select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
+  #select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
   arrange(median)
 
 FUTLAM
@@ -156,7 +159,8 @@ EV.fut<-out[(grep("Nterr.f",out$parameter)),c(12,5,3,7)] %>%
   dplyr::select(parm,n.rel,n.years,surv.inc,lag.time,Year,median,lcl,ucl)
 
 
-
+fwrite(EV.fut,"EGVU_fut_pop_size_all_scenarios.csv")
+fwrite(EV.past,"EGVU_past_pop_size.csv")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -172,8 +176,6 @@ EV.base <- EV.fut %>% filter(n.rel==0 & surv.inc<1.0001 & n.years==10 & lag.time
   arrange(Year)
 
 
-#pdf("EV_population_projection_BASELINE.pdf", width=10, height=7)
-#jpeg("EV_population_projection_BASELINE.jpg", width=9, height=6, units="in", res=600, quality=100)
 
 ggplot()+
   geom_line(data=EV.base, aes(x=Year, y=median), color="cornflowerblue",size=1)+
@@ -200,7 +202,8 @@ ggplot()+
         strip.text.x=element_text(size=18, color="black"), 
         strip.background=element_rect(fill="white", colour="black"))
 
-dev.off()
+ggsave("EV_population_projection_BASELINE.jpg", width=9, height=6)
+
 
 
 
@@ -250,7 +253,7 @@ ggplot()+
         strip.text.x=element_text(size=12, color="black"), 
         strip.background=element_rect(fill="white", colour="black"))
 
-ggsave("EV_population_projection_allScenarios.pdf", width=16, height=12)
+ggsave("EV_population_projection_allScenarios.jpg", width=16, height=12)
 
 
 ## specify what survival should be for stable population
@@ -338,81 +341,94 @@ mean(out[(grep("surv",out$parameter)),1])*1.08
 # replaced NeoIPMeggredNoRescue with NeoIPM.ALL
 
 rm(list=setdiff(ls(), c("NeoIPM.ALL","ncr.lu","surv.lu","trendinput")))
-gc()
 
 
-### FIND COLUMS WE NEED
-selcol<-grep("Nterr.f",names(as.data.frame(NeoIPM.ALL$samples[[1]])))
-samplesout<-as.data.frame(NeoIPM.ALL$samples[[1]][,selcol]) %>% gather(key="parm", value="value") %>%
-                            mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
-                            mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
-                            mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
-                            left_join(ncr.lu, by="capt.index") %>%
-                            left_join(surv.lu, by="surv.index")
-                          
-                          
-                          
-                          ,NeoIPM.ALL$samples[[2]][,selcol],NeoIPM.ALL$samples[[3]][,selcol],NeoIPM.ALL$samples[[4]][,selcol]))
-#head(samplesout)
+### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
+extprop <- data.frame()
 
-extprop <- samplesout 
+for(scen in 1:nrow(ncr.lu)){
+  
+  ### FIND COLUMS WE NEED
+  colname<-sprintf("Nterr.f\\[%s,",scen)
+  selcol<-grep(colname,dimnames(NeoIPM.ALL$samples[[1]])[[2]])
+  
+  allchainsamples <- data.frame()
+  for(chain in 1:4) {
+    
+      ### EXTRACT AND SUMMARISE DATA
+      samplesout<-as.data.frame(NeoIPM.ALL$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
+      allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
+    }
+    
+  ### CALCULATE EXTINCTION PROBABILITY
+    allchainsamples<- allchainsamples %>%
+      mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+      mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
+      mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
+      
+      mutate(n=1, inc=ifelse(value<5,1,0)) %>%
+      group_by(capt.index,surv.index,Year) %>%
+      summarise(ext.prob=sum(inc)/sum(n))
+  
+    extprop <- rbind(extprop,as.data.frame(allchainsamples))
+    print(scen)
+}
+
+
+head(samplesout)
+
+
   
 head(extprop)  
+
   
   
   
-  
-  mutate(capt.release=as.numeric(substr(parm,9,9)), imp.surv=as.numeric(substr(parm,11,11)))  %>%
-  filter(imp.surv %in% c(1,2,3,4)) %>% ### reduce plotting options
-  mutate(Year=ifelse(nchar(parm)==14,substr(parm,13,13),substr(parm,13,14))) %>%
-  mutate(n=1, inc=ifelse(value<5,1,0)) %>%
-  group_by(imp.surv,capt.release,Year) %>%
-  summarise(ext.prob=sum(inc)/sum(n)) %>%
-  mutate(Year=as.numeric(Year)+2018) 
+
 
 
 ## create factors for plot labels and order them appropriately
-extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
+
+extprop<- extprop %>%
+  left_join(ncr.lu, by="capt.index") %>%
+  left_join(surv.lu, by="surv.index") %>%
+  mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+  mutate(lag.time=sprintf("after %s years",lag.time)) %>%
+  mutate(n.years=sprintf("for %s years",n.years)) %>%
+  mutate(n.rel=as.numeric(n.rel)) %>%
+  arrange(n.rel,Year) %>%
+  mutate(release=paste(n.rel,n.years," ")) 
+#extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+#extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
+dim(extprop)
+fwrite(extprop[,c(3,5,6,7,8,4)],"EGVU_ext_prob_all_scenarios.csv")
 
 
 
 ### produce plot with 4 panels and multiple lines per year
 
-#pdf("EV_extinction_probability_C3.pdf", width=10, height=7)
-#jpeg("EV_extinction_probability_C3.jpg", width=9, height=6, units="in", res=600, quality=100)
 ggplot(data=extprop)+
-  geom_line(aes(x=Year, y=ext.prob, color=capt.release), size=1)+
-  facet_wrap(~imp.surv,ncol=2) +
+  geom_line(aes(x=Year, y=ext.prob, color=release), size=1)+
+  facet_wrap(~surv.inc+lag.time,ncol=6) +
   
   ## format axis ticks
   scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
-  scale_x_continuous(name="Year", breaks=seq(2019,2068,5), labels=as.character(seq(2019,2068,5)))+
+  scale_x_continuous(name="Year", breaks=seq(2020,2050,5), labels=as.character(seq(2020,2050,5)))+
   guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
   
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"),
         panel.grid.major = element_line(colour="darkgrey"),
         panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=18, color="black"),
+        axis.text.y=element_text(size=12, color="black"),
         axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
         axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=18, color="black"), 
+        strip.text.x=element_text(size=10, color="black"), 
         strip.background=element_rect(fill="white", colour="black"),
         legend.title = element_text(size=14, face="bold"),
         legend.text = element_text(size=12))
 
-dev.off()
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# COMPARE WHY EXTINCTION PROBABILITY OF THE GRAPHS 1 and 3 DO NOT MATCH
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-EV.fut$Year[min(which(EV.fut$median<5))]
-extprop %>% filter(imp.surv=="no improvement") %>%
-  filter(capt.release=="no captive releases") %>%
-  filter(Year>2040)
-
+ggsave("EV_extinction_probability_allscenarios.jpg", width=9, height=6)
 
 
 
@@ -421,50 +437,20 @@ extprop %>% filter(imp.surv=="no improvement") %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # GRAPH 4: PLOT FUT POP GROWTH AGAINST NUMBER OF RELEASED CHICKS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-samplesout<-as.data.frame(rbind(NeoIPM.ALL$samples[[1]],NeoIPM.ALL$samples[[2]],NeoIPM.ALL$samples[[3]],NeoIPM.ALL$samples[[4]]))
-head(samplesout)
+head(FUTLAM)
 
-allsamp <- samplesout %>% gather(key="parm", value="value") %>%
-  filter(grepl("fut.lambda",parm)) %>%
-  mutate(capt.release=0, imp.surv=0)
-
-
-### EXTRACT PROPER SCENARIOS WITH PATTERN MATCHING
-## give the projections proper scenario labels
-capt.release=seq(0,15,1)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
-
-
-# res<-str_match(allsamp$parm,"lambda (.*?) ,")
-# gsub(".*[[] (.+) [,].*", "\\1", "fut.lambda[1,1]")
-# str_extract("fut.lambda[1,1]", perl=("(?<=[)(.+)(?=\\,)"))
-# as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)[1]+1,regexpr(",",allsamp$parm)[1]-1))
-#imp.surv[as.numeric(substr("fut.lambda[10,1]",regexpr(",","fut.lambda[10,1]")+1,regexpr("]","fut.lambda[10,1]")-1))]
-allsamp$capt.release<-capt.release[as.numeric(substr(allsamp$parm,regexpr("\\[",allsamp$parm)+1,regexpr(",",allsamp$parm)-1))]
-allsamp$imp.surv<-imp.surv[as.numeric(substr(allsamp$parm,regexpr(",",allsamp$parm)+1,regexpr("]",allsamp$parm)-1))]
-allsamp$imp.surv <- ifelse(allsamp$imp.surv>1,paste("+",as.integer((allsamp$imp.surv-1)*100),"%"),"none")
-
-## create factors for plot labels and order them appropriately
-#allsamp$capt.release <- ifelse(allsamp$capt.release>1,paste("+",allsamp$capt.release,"chicks/year"),"no captive releases")
-#allsamp$capt.release <- factor(allsamp$capt.release, levels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-allsamp$imp.surv <- factor(allsamp$imp.surv, levels = c("+ 10 %","+ 8 %","+ 6 %","+ 4 %","+ 2 %","none"))
-head(allsamp)
-
-
-#### summarise all samples to show median and 95% credible interval
-futrate.sum<- allsamp %>% filter(value!=0) %>%
-  group_by(parm,capt.release,imp.surv) %>%
-  summarise(median=median(value), lcl=quantile(value,0.025), ucl=quantile(value,0.975))
-
+FUTLAM %>% mutate(n.rel=as.numeric(n.rel)) %>%
+  mutate(lag.time=sprintf("after %s years",lag.time)) %>%
+  
 ### CREATE PLOT ###
-pdf("EV_fut_growth_rate_capt_release.pdf", width=10, height=7)
-ggplot(futrate.sum)+
+ggplot()+
   geom_hline(aes(yintercept=1), color='red', size=1)+
-  geom_line(aes(x=capt.release,y=median),size=1)+
-  geom_ribbon(aes(x=capt.release, ymin=lcl,ymax=ucl),alpha=0.2)+
-  geom_line(aes(x=capt.release,y=lcl),size=0.5,color="darkgrey")+
-  geom_line(aes(x=capt.release,y=ucl),size=0.5,color="darkgrey")+
-  facet_wrap(~imp.surv,ncol=3) +
+  geom_line(aes(x=n.rel,y=median, color=n.years),size=1)+
+  geom_ribbon(aes(x=n.rel, ymin=lcl,ymax=ucl, fill=n.years),alpha=0.2)+
+  facet_wrap(~surv.inc+lag.time,ncol=6) +
+  
+  guides(color=guide_legend(title="N years \n releases"),fill=guide_legend(title="N years \n releases"))+
+  
 
   ylab("Future population growth rate") +
   xlab("Number of chicks released per year") +
@@ -472,30 +458,41 @@ ggplot(futrate.sum)+
         axis.text.y=element_text(size=16, color="black"),
         axis.text.x=element_text(size=16, color="black", vjust=0.5), 
         axis.title=element_text(size=18), 
-        strip.text.x=element_text(size=16, color="black"), 
+        strip.text.x=element_text(size=10, color="black"), 
         strip.background=element_rect(fill="white", colour="black"), 
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(), 
         panel.border = element_blank())
 
-dev.off()
+ggsave("EGVU_fut_pop_growth_all_scenarios.jpg", width=10, height=8)
 
 
 
 
-### quantify what number of individuals is needed to achieve positive growth rate
 
-futrate.sum %>% filter(median>0.9999) %>%
-  group_by(imp.surv) %>%
-  summarise(min=min(capt.release))
 
-futrate.sum %>% filter(lcl>0.9999) %>%
-  group_by(imp.surv) %>%
-  summarise(min=min(capt.release))
 
-futrate.sum %>% filter(ucl>0.9999) %>%
-  group_by(imp.surv) %>%
-  summarise(min=min(capt.release))
+
+
+
+#### ~~~~~~~~~~ OLD ABANDONED CODE NO LONGER USED WITH RESULTS v4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
+
+
+# ### quantify what number of individuals is needed to achieve positive growth rate
+# 
+# futrate.sum %>% filter(median>0.9999) %>%
+#   group_by(imp.surv) %>%
+#   summarise(min=min(capt.release))
+# 
+# futrate.sum %>% filter(lcl>0.9999) %>%
+#   group_by(imp.surv) %>%
+#   summarise(min=min(capt.release))
+# 
+# futrate.sum %>% filter(ucl>0.9999) %>%
+#   group_by(imp.surv) %>%
+#   summarise(min=min(capt.release))
+
+
 
 
 
