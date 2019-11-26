@@ -26,6 +26,14 @@
 
 ## MODIFIED ON 21 NOV TO INCLUDE 2019 DATA
 
+## email by Vic Saravia (HOS) on 26 NOV 2019 specifies the following graph requirements: 
+
+# -	All relevant graphs fixed at a 10 year lag to reach the according survival rate. We think that being realistic, 5 years are too few to reach a 6% survival (a % that starts to make a real impact on the population) while 15 years might be too far into the future. So 10 years seems the most feasible and the best compromise. 
+# -	Would it be possible to send the graphs in ascending order? Now Survival rate of 10% is next to 2% and then 8% is next to none, so it makes it difficult to compare. 
+# -	In the same line as the previous, would it be possible to colour group the number of captive bird releases per year again in ascending order (now it jumps from 1 to 10 and from 15 back to 2) and make the colours as distinct as possible (the population projection is particularly difficult to read as all lines seem to either be grey or red).
+# -	Would it be possible to add the 50% extinction risk line too? 5% is good because it gives the idea of immediacy, but the 50% transmits better the idea of inevitability.
+# -	We would also like to have the previous graph with the 5 year chick removal factor which you had done in the past.
+
 library(tidyverse)
 library(ggplot2)
 library(data.table)
@@ -159,23 +167,21 @@ EV.fut<-out[(grep("Nterr.f",out$parameter)),c(12,5,3,7)] %>%
   dplyr::select(parm,n.rel,n.years,surv.inc,lag.time,Year,median,lcl,ucl)
 
 
-fwrite(EV.fut,"EGVU_fut_pop_size_all_scenarios.csv")
-fwrite(EV.past,"EGVU_past_pop_size.csv")
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# GRAPH 1: POPULATION TRAJECTORY UNDER THE NO MANAGEMENT SCENARIO
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#fwrite(EV.fut,"EGVU_fut_pop_size_all_scenarios.csv")
+#fwrite(EV.past,"EGVU_past_pop_size.csv")
 
 
 
-### produce plot FOR BASELINE TRAJECTORY
+
+### SUMMARISE FOR BASELINE TRAJECTORY
 EV.base <- EV.fut %>% filter(n.rel==0 & surv.inc<1.0001 & n.years==10 & lag.time==10) %>%
   select(parm, median, lcl, ucl, Year) %>%
   bind_rows(EV.past) %>%
   arrange(Year)
 
 
+
+### CREATE PLOT FOR BASELINE TRAJECTORY
 
 ggplot()+
   geom_line(data=EV.base, aes(x=Year, y=median), color="cornflowerblue",size=1)+
@@ -187,12 +193,12 @@ ggplot()+
   scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
   
   ## ADD LINES FOR EXTINCTION
-  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<5))],linetype='dashed', size=1,colour="firebrick")+
-  #geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<5))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
   
   ## ADD LABELS FOR EXTINCTION
-  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<5))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<5))]), size=5, colour="firebrick", hjust=1)+
-  #geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<5))],label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<5))])), size=5, colour="firebrick", hjust=0)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
   
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -209,31 +215,37 @@ ggsave("EV_population_projection_BASELINE.jpg", width=9, height=6)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# GRAPH 1B: PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
+# GRAPH 2: PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 head(EV.fut)
+
 ## CREATE A COLOUR PALETTE FOR THE NUMBER OF CHICKS RELEASED
-colfunc <- colorRampPalette(c("darkgrey", "indianred"))
-colfunc(16)
+colfunc <- colorRampPalette(c("cornflowerblue", "firebrick"))
+
+
+## SELECT ONLY 10 YEAR SURVIVAL LAG
+## modify factors for printing
 
 EV.fut %>%
+  filter(lag.time==10) %>%
   mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
-  mutate(lag.time=sprintf("after %s years",lag.time)) %>%
+  mutate(surv.inc.ord=factor(surv.inc, levels = c("none","+ 2 %","+ 4 %","+ 6 %","+ 8 %","+ 10 %"))) %>%
+  mutate(n.rel.ord=factor(n.rel, levels = c("0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"))) %>%
+  #mutate(lag.time=sprintf("after %s years",lag.time)) %>%
   mutate(n.years=sprintf("for %s years",n.years)) %>%
-  mutate(n.rel=as.numeric(n.rel)) %>%
   arrange(n.rel,Year) %>%
-  mutate(release=paste(n.rel,n.years," ")) %>% 
+  #mutate(release=paste(n.rel,n.years," ")) %>% 
   #mutate(n.years=as.factor(n.years)) %>%
-  
-### produce plot with 6 panels and multiple lines per year
 
+  
+    
+### produce plot with 18 panels and multiple lines per year
 
 ggplot()+
-  geom_line(aes(x=Year, y=median, color=release))+
+  geom_line(aes(x=Year, y=median, color=n.rel.ord),size=1)+
   #geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl, fill=capt.release),alpha=0.2)+
   #geom_line(data=trendinput, aes(x=year, y=N), size=1,col='cornflowerblue')+
-  facet_wrap(~surv.inc+lag.time,ncol=6) +
+  facet_grid(n.years~surv.inc.ord) +
   
   ## format axis ticks
   scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,200),breaks=seq(0,200,50), labels=as.character(seq(0,200,50)))+
@@ -245,15 +257,16 @@ ggplot()+
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         axis.text.y=element_text(size=14, color="black"),
-        axis.text.x=element_text(size=14, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
         axis.title=element_text(size=18),
         legend.text=element_text(size=12, color="black"),
         legend.title=element_text(size=14, color="black"),
         legend.key = element_rect(fill = NA),
-        strip.text.x=element_text(size=12, color="black"), 
+        strip.text.x=element_text(size=14, color="black"),
+        strip.text.y=element_text(size=14, color="black"), 
         strip.background=element_rect(fill="white", colour="black"))
 
-ggsave("EV_population_projection_allScenarios.jpg", width=16, height=12)
+ggsave("EV_population_projection_allScenarios.jpg", width=16, height=13)
 
 
 ## specify what survival should be for stable population
@@ -268,7 +281,6 @@ mean(out[(grep("surv",out$parameter)),1])*1.08
 # GRAPH 2: POPULATION TRAJECTORY WHEN REMOVING ALL SECOND CHICKS FOR 5 YEARS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ## abandoned on 21 Nov 2019 because this scenario is bullshit
-
 
 
 # out<-as.data.frame(NeoIPMeggredNoRescue$summary)
