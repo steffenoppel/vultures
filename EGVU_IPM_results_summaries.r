@@ -109,7 +109,7 @@ for (c in 1:nc){
 TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
 names(TABLE1)<-c("Parameter","Median","lowerCL","upperCL")
 TABLE1$Parameter<-c("fecundity","first year survival","second year survival", "third year survival","population growth rate","adult survival")
-fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates.csv")
+#fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates.csv")
 
 
 
@@ -139,7 +139,7 @@ FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
   arrange(median)
 
 FUTLAM
-fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios.csv")
+#fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios.csv")
 
 
 
@@ -271,70 +271,64 @@ ggsave("EV_population_projection_allScenarios.jpg", width=16, height=13)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# GRAPH 3: POPULATION TRAJECTORY WHEN REMOVING ALL SECOND CHICKS FOR 5 YEARS
+# GRAPH 3: POPULATION TRAJECTORY WHEN REMOVING ALL SECOND CHICKS FOR 5 YEARS AND NOT RELEASING ANYTHING
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ## abandoned on 21 Nov 2019 because this scenario is bullshit
+## re-instated on 29 Nov 2019 with new model output including data from 2019
+
+try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
+load("EGVU_IPM_output2019_eggremoval.RData")
+out.eggred<-as.data.frame(NeoIPMeggredNoRescue$summary)
+out.eggred$parameter<-row.names(NeoIPMeggredNoRescue$summary)
+
+## retrieve the population projections and insert proper scenario labels
+EV.fut.eggred<-out.eggred[(grep("Nterr.f",out.eggred$parameter)),c(12,5,3,7)] %>%
+  mutate(Year=rep(seq(max(trendinput$year)+1,(max(trendinput$year)+INPUT$PROJECTION),1),each=2*dim(surv.lu)[1])) %>%
+  mutate(capt.index=as.numeric(str_extract_all(parameter,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+  mutate(surv.index=as.numeric(str_extract_all(parameter,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%  
+  left_join(ncr.lu, by="capt.index") %>%
+  left_join(surv.lu, by="surv.index") %>%
+  rename(parm=parameter,median=`50%`,lcl=`2.5%`,ucl=`97.5%`) %>%
+  dplyr::select(parm,n.rel,n.years,surv.inc,lag.time,Year,median,lcl,ucl)
 
 
-# out<-as.data.frame(NeoIPMeggredNoRescue$summary)
-# out$parameter<-row.names(NeoIPMeggredNoRescue$summary)
-# 
-# ## retrieve the population projections
-# EV.fut.chick<-out[(grep("Nterr",out$parameter)),c(12,5,3,7)] %>%
-#   mutate(Year=c(trendinput$year,rep(seq(2019,2068,1),each=4*7)))
-# names(EV.fut.chick)[1:4]<-c('parm','median','lcl','ucl')
-# 
-# ## give the projections proper scenario labels
-# capt.release=seq(0,15,1)
-# imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
-# EV.fut.chick <- EV.fut.chick %>% mutate(capt.release=0, imp.surv=0)
-# EV.fut.chick$capt.release[grep(",",EV.fut.chick$parm)]<-capt.release[as.numeric(substr(EV.fut.chick$parm[grep(",",EV.fut.chick$parm)],9,9))]
-# EV.fut.chick$imp.surv[grep(",",EV.fut.chick$parm)]<-imp.surv[as.numeric(substr(EV.fut.chick$parm[grep(",",EV.fut.chick$parm)],11,11))]
-# EV.fut.chick <- EV.fut.chick %>% filter(capt.release==0 & imp.surv<1.0001)
-# 
-# 
-# 
-# ### COMBINE BOTH TRAJECTORIES FOR A PLOT OF BOTH SCENARIOS
-# EV.fut$Scenario<-"Baseline"
-# EV.fut.chick$Scenario<-"Chick removal"
-# plotdat<- rbind(EV.fut, EV.fut.chick) 
-# 
-# 
-# 
-# #pdf("EV_population_projection_TwoScenarios.pdf", width=10, height=7)
-# #jpeg("EV_population_projection_TwoScenarios.jpg", width=9, height=6, units="in", res=600, quality=100)
-# 
-# ggplot()+
-#   geom_line(data=plotdat, aes(x=Year, y=median, color=Scenario), size=1)+
-#   geom_ribbon(data=plotdat,aes(x=Year, ymin=lcl,ymax=ucl, fill=Scenario),alpha=0.2)+
-#   geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
-#   
-#   ## format axis ticks
-#   scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,130),breaks=seq(0,130,30), labels=as.character(seq(0,130,30)))+
-#   scale_x_continuous(name="Year", breaks=seq(2006,2068,5), labels=as.character(seq(2006,2068,5)))+
-#   
-#   ## ADD LINES FOR EXTINCTION
-#   geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$lcl<5))],linetype='dashed', size=1,colour="#F8766D")+
-#   geom_vline(xintercept=EV.fut$Year[min(which(EV.fut$median<5))],linetype='dashed', size=1,colour="#F8766D")+
-#   geom_vline(xintercept=EV.fut.chick$Year[min(which(EV.fut.chick$lcl<5))],linetype='dotted', size=1,colour="#00BFC4")+
-#   geom_vline(xintercept=EV.fut.chick$Year[min(which(EV.fut.chick$median<5))],linetype='dotted', size=1,colour="#00BFC4")+
-#   
-#   ## ADD LABELS FOR EXTINCTION
-#   geom_text(aes(y=125,x=EV.fut.chick$Year[min(which(EV.fut.chick$lcl<5))]-1),label="5% probability", size=5, colour="darkblue", hjust=1)+
-#   geom_text(aes(y=125,x=EV.fut$Year[min(which(EV.fut$median<5))]+1),label="50% probability", size=5, colour="darkblue", hjust=0)+
-#   
-#   ## beautification of the axes
-#   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-#         axis.text.y=element_text(size=18, color="black"),
-#         axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
-#         axis.title=element_text(size=18), 
-#         strip.text.x=element_text(size=18, color="black"), 
-#         strip.background=element_rect(fill="white", colour="black"),
-#         legend.title = element_text(size=14, face="bold"),
-#         legend.text = element_text(size=12))
-# 
-# dev.off()
-# 
+### SUMMARISE FOR BASELINE TRAJECTORY
+EV.base.eggred <- EV.fut.eggred %>% filter(n.rel==0 & surv.inc<1.0001 & n.years==10 & lag.time==10) %>%
+  select(parm, median, lcl, ucl, Year) %>%
+  bind_rows(EV.past) %>%
+  arrange(Year)
+
+
+
+### CREATE PLOT FOR 5 YEAR EGG REMOVAL SCENARIO
+
+ggplot()+
+  geom_line(data=EV.base, aes(x=Year, y=median), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.base,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,125),breaks=seq(0,120,30), labels=as.character(seq(0,120,30)))+
+  scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
+  
+  ## ADD LINES FOR EXTINCTION
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
+  
+  ## ADD LABELS FOR EXTINCTION
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+ggsave("EV_population_projection_BASELINE.jpg", width=9, height=6)
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
