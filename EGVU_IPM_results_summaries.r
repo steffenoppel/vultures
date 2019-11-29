@@ -402,7 +402,7 @@ ggplot(data=extprop)+
   facet_grid(n.years~surv.inc.ord) +
   
   ## format axis ticks
-  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,0.5),breaks=seq(0,0.5,0.1), labels=as.character(seq(0,50,10)))+
+  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
   scale_x_continuous(name="Year", breaks=seq(2020,2050,5), labels=as.character(seq(2020,2050,5)))+
   guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
   scale_colour_manual(palette=colfunc)+
