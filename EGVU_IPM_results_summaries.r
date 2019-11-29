@@ -325,45 +325,45 @@ ggsave("EGVU_future_growth_rate_allScenarios.jpg", width=10, height=8)
 
 ### COMMENTED OUT ON 29 NOV 2019 - simply read in csv file
 
-# rm(list=setdiff(ls(), c("NeoIPM.ALL","ncr.lu","surv.lu","trendinput")))
-# 
-# 
-# ### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
-# extprop <- data.frame()
-# 
-# for(scen in 1:nrow(ncr.lu)){
-#   
-#   ### FIND COLUMS WE NEED
-#   colname<-sprintf("Nterr.f\\[%s,",scen)
-#   selcol<-grep(colname,dimnames(NeoIPM.ALL$samples[[1]])[[2]])
-#   
-#   allchainsamples <- data.frame()
-#   for(chain in 1:4) {
-#     
-#       ### EXTRACT AND SUMMARISE DATA
-#       samplesout<-as.data.frame(NeoIPM.ALL$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
-#       allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
-#     }
-#     
-#   ### CALCULATE EXTINCTION PROBABILITY
-#     allchainsamples<- allchainsamples %>%
-#       mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
-#       mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
-#       mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
-#       
-#       mutate(n=1, inc=ifelse(value<5,1,0)) %>%
-#       group_by(capt.index,surv.index,Year) %>%
-#       summarise(ext.prob=sum(inc)/sum(n))
-#   
-#     extprop <- rbind(extprop,as.data.frame(allchainsamples))
-#     print(scen)
-# }
-# 
-# head(samplesout)
-# head(extprop)
-# dim(extprop)
-# 
-# fwrite(extprop,"EGVU_ext_prob_all_scenarios.csv")
+rm(list=setdiff(ls(), c("NeoIPM.ALL","ncr.lu","surv.lu","trendinput")))
+
+
+### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
+extprop <- data.frame()
+
+for(scen in 1:nrow(ncr.lu)){
+
+  ### FIND COLUMS WE NEED
+  colname<-sprintf("Nterr.f\\[%s,",scen)
+  selcol<-grep(colname,dimnames(NeoIPM.ALL$samples[[1]])[[2]])
+
+  allchainsamples <- data.frame()
+  for(chain in 1:4) {
+
+      ### EXTRACT AND SUMMARISE DATA
+      samplesout<-as.data.frame(NeoIPM.ALL$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
+      allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
+    }
+
+  ### CALCULATE EXTINCTION PROBABILITY
+    allchainsamples<- allchainsamples %>%
+      mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+      mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
+      mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
+
+      mutate(n=1, inc=ifelse(value<10,1,0)) %>%
+      group_by(capt.index,surv.index,Year) %>%
+      summarise(ext.prob=sum(inc)/sum(n))
+
+    extprop <- rbind(extprop,as.data.frame(allchainsamples))
+    print(scen)
+}
+
+head(samplesout)
+head(extprop)
+dim(extprop)
+
+fwrite(extprop,"EGVU_ext_prob_all_scenarios.csv")
 extprop<-fread("EGVU_ext_prob_all_scenarios.csv")
 
 
