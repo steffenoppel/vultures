@@ -37,7 +37,9 @@
 ## include releases for 10,20, and 30 years
 ## include gradual improvement of survival (not immediate improvement) over next 5 years
 
-### NEED TO DO: INCLUDE DATA FROM 2019
+### 22 NOVEMBER 2019: INCLUDED DATA FROM 2019
+
+### 29 NOVEMBER 2019: re-instated chick removal model
 
 
 library(readxl)
@@ -963,11 +965,11 @@ nb <- 10000
 #                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
-# NeoIPMeggredNoRescue <- jags(data=INPUT,
-#                        inits=initIPM,
-#                        parameters.to.save=paraIPM,
-#                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
-#                        n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+NeoIPMeggredNoRescue <- jags(data=INPUT,
+                       inits=initIPM,
+                       parameters.to.save=paraIPM,
+                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
+                       n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
 # NeoIPMeggredRescue <- jags(data=INPUT,
