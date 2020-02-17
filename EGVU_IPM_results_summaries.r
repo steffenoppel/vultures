@@ -31,6 +31,10 @@
 # -	Would it be possible to add the 50% extinction risk line too? 5% is good because it gives the idea of immediacy, but the 50% transmits better the idea of inevitability.
 # -	We would also like to have the previous graph with the 5 year chick removal factor which you had done in the past.
 
+
+## MODIFIED 20 FEB 2020 TO PRESENT DATA FOR MANUSCRIPT
+
+
 library(tidyverse)
 library(ggplot2)
 library(data.table)

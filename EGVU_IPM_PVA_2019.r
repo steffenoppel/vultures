@@ -95,7 +95,19 @@ breedinput1EGG<- breed %>% filter(Year>2005) %>%
 
 breedinput$J-breedinput1EGG$J
 
+### numbers for manuscript
+breed %>% filter(Year>2005) %>%
+  rename(year=Year) %>%
+  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
+  filter(!is.na(breed_success)) %>%
+  group_by(territory_NAME) %>%
+  summarise(Nyears=length(year))
 
+occu %>% filter(year>2005) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%
+  group_by(Country) %>%
+  summarise(N=length(unique(territory_NAME)))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
@@ -134,7 +146,8 @@ CH.telemetry<-birds %>%
 CH.telemetry[,5:64]<-0									### NEEDS MANUAL ADJUSTMENT IF REPEATED FOR LONGER TIME SERIES
 x.telemetry<-as.matrix(CH.telemetry[,5:64]) ### create matrix with age progression
 
-
+dim(CH.telemetry)
+range(CH.telemetry$Tag_year)
 
 ### FILL CAPTURE HISTORY WITH LIVE DEAD INFORMATION ###
 ### THIS MAY REQUIRE A FIX IN THE FUTURE IF BIRDS THAT ARE STILL ALIVE HAVE NOT BEEN TAGGED > 4 YEARS AGO
@@ -470,7 +483,8 @@ survparm.terrvis <- primlookup$PARM[1:(K.terrvis-1)]	# parameter for survival - 
 yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
 
 
-
+### report sample size in manuscript
+dim(y.terrvis)
 
 
 
