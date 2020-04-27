@@ -80,6 +80,10 @@ breedinput<- breed %>% filter(Year>2005) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
 
+## export data
+#fwrite(trendinput,"EGVU_adult_counts.csv")
+#fwrite(breedinput,"EGVU_breeding_summary.csv")
+
 ### MODIFY BREEDINPUT FOR EGG HARVEST ###
 
 breedinput1EGG<- breed %>% filter(Year>2005) %>%
@@ -117,6 +121,7 @@ try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
 load("RODBC_EGVU_telemetry_input.RData")
+
 head(birds)
 
 birds$Fledge_date[is.na(birds$Fledge_date)]<-birds$Tag_date[is.na(birds$Fledge_date)] ### fill in 'fledge' which equals tag date for wild non-juveniles
@@ -138,6 +143,7 @@ dim(timeseries)
 
 CH.telemetry<-birds %>%
   filter(Age %in% c("juv","2cal_year","3cal_year","4cal_year")) %>%                   ### changed in 2019 to include immatures caught in Ethiopia
+  filter(Tag_date<ymd("2019-10-01")) %>%
   select(Name,Tag_year, Age,origin) %>% 
   filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
   filter(origin=="wild")     %>%               ### USE ONLY WILD JUVENILES
@@ -195,6 +201,9 @@ for(n in CH.telemetry$Name){
 y.telemetry<-as.matrix(CH.telemetry[,5:64])
 str(x.telemetry)
 
+## REPORT SAMPLE SIZE FOR N BIRDS DEAD WITHIN 10 MONTHS
+
+CH.telemetry[,1:14]
 
 
 #### Function to create a matrix with information about known latent state z
@@ -246,7 +255,7 @@ ch.init <- function(ch, f){
   return(ch)
 }
 
-
+rm(locs)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -308,6 +317,7 @@ EGVU<- EGVU %>%
   select(territory_name,date,visit_duration,n_adults) %>%
   mutate(Year=year(date),JDAY=yday(date),WEEK=week(date), MONTH=month(date)) %>%
   mutate(PRIMOCC=paste(Year,MONTH, sep="_")) %>%     ## CREATE UNIQUE PRIMARY OCCASION (MONTH WITHIN YEARS)
+  filter(Year < 2020) %>%
   filter(MONTH %in% c(4:8)) %>%
   filter(WEEK %in% c(13:35))
 
@@ -378,6 +388,10 @@ enc.terrvis <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
   summarise(OBS=max(n_adults, na.rm=T)) %>%
   spread(key=PRIMOCC, value=OBS, fill = 0) %>%
   arrange(terrnum)
+
+## export data
+#fwrite(enc.terrvis,"EGVU_territory_observations.csv")
+
 
 z.terrvis<-as.matrix(enc.terrvis[,c(2:dim(enc.terrvis)[2])])
 
@@ -896,7 +910,6 @@ paraIPM<-c("mu.fec","lambda.t","ann.phi.juv.telemetry","ann.phi.sec.telemetry","
             "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
           
 
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SPECIFY INITIAL VALUES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -964,6 +977,15 @@ initIPM <- function(){list(z.terrvis = z.init.terrvis,
                          mean.p.telemetry = runif(1, 0.95, 1))}  
 
 
+### REDUCE WORKSPACE FOR RUNNING MODEL
+rm.list<-data.frame(object=as.character(ls()), size=0)
+for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
+rm.list %>% arrange(size)
+rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat")))
+gc()
+save.image("EGVU_IPM_input.RData")
+
+
 # MCMC settings
 nc <- 4
 nt <- 4
@@ -979,11 +1001,11 @@ nb <- 10000
 #                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
-NeoIPMeggredNoRescue <- jags(data=INPUT,
-                       inits=initIPM,
-                       parameters.to.save=paraIPM,
-                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
-                       n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+# NeoIPMeggredNoRescue <- jags(data=INPUT,
+#                        inits=initIPM,
+#                        parameters.to.save=paraIPM,
+#                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
+#                        n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
 # NeoIPMeggredRescue <- jags(data=INPUT,
@@ -1007,7 +1029,7 @@ NeoIPM.ALL <- jags(data=INPUT,
 #                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
   
 
-save.image("EGVU_IPM_output2019_v4.RData")
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM_output_v5.RData")
 
 
 

@@ -427,7 +427,15 @@ ggsave("EGVU_extinction_probability_allScenarios.jpg", width=9, height=6)
 
 
 
-
+### CREATE TABLE 2 FOR MANUSCRIPT ###
+## added 18 Feb 2020
+head(extprop)
+TABLE2<- extprop %>%
+  filter(surv.inc.ord=="none") %>%
+  filter(Year==2049) %>%
+  select(ext.prob,n.rel.ord,n.years) %>%
+  spread(key=n.years,value=ext.prob)
+fwrite(TABLE2,"TABLE2.csv")
 
 
 
@@ -569,7 +577,7 @@ ggplot(allsamp)+
   
   
   ylab("Future population growth rate") +
-  xlab("Number of chicks released per year") +
+  xlab("Number of captive-bred birds released per year") +
   theme(panel.background=element_rect(fill="white", colour="black"), 
         axis.text.y=element_text(size=16, color="black"),
         axis.text.x=element_text(size=16, color="black", vjust=0.5), 
