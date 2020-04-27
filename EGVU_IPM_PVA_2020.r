@@ -42,7 +42,7 @@
 
 ### 27 APRIL 2020: Included revised and corrected data from 2019 and modified model to allow changes in adult survival
 ### saved as new file
-### included new data on adult survival
+### included new data on adult survival and changed priors
 
 library(readxl)
 library(jagsUI)
@@ -489,7 +489,7 @@ dim(y.terrvis)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2019_ExtendedProjection.jags")
+sink("EGVU_IPM_2020_ExtendedProjection.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -497,7 +497,7 @@ model {
 # - age structured model with 6 age classes: 
 # - age-specific probability to recruit at ages 4 or 5
 # - age-specific survival derived from tracking data
-# - adult survival based on territory occupancy
+# - adult survival based on territory occupancy; CHANGES in 2016
 # - pre breeding census, female-based assuming equal sex ratio & survival
 # - FUTURE PROJECTION COMBINES SCENARIOS: baseline scenario (=do nothing, no chick removal)
 # - productivity supplemented by captive-bred juveniles (0-10 per year)
@@ -550,9 +550,11 @@ model {
     ## monthly BREEDING SEASON survival must be greater than 88% on logit scale
     ## monthly NON-BREEDING SEASON survival must be greater than 88% on logit scale
 
-    for (nypterr in 1:nyears.terrvis){
-      lm.phi.terrvis[1,nypterr] ~ dunif(2, 5)				      
-      lm.phi.terrvis[2,nypterr] ~ dunif(2, 5)    
+    for (nypterr in 1:2){   ## only 2 survival periods
+      lm.phi.terrvis[1,nypterr] <- log(mean.phi.terrvis[1,nypterr]/(1 - mean.phi.terrvis[1,nypterr]))    # logit transformed survival intercept		      
+      lm.phi.terrvis[2,nypterr]  <- log(mean.phi.terrvis[2,nypterr]/(1 - mean.phi.terrvis[2,nypterr]))    # logit transformed survival intercept
+      mean.phi.terrvis[1,nypterr] ~ dunif(0.95, 1)   # uninformative prior for all MONTHLY survival probabilities
+      mean.phi.terrvis[2,nypterr] ~ dunif(0.95, 1)   # uninformative prior for all MONTHLY survival probabilities
     }    
     
 
@@ -710,9 +712,9 @@ for (tt in 2:T.count){
     
     # Survival probability averaged across season and year
     for (nys in 1:nyears.terrvis){
-      breed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[1,nys]))
-      nonbreed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[2,nys]))
-      ann.surv.terrvis[nys]<-pow(breed.surv.terrvis[nys],4)*pow(nonbreed.surv.terrvis[nys],7)
+      #breed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[1,year.terrvis[nys]]))
+      #nonbreed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[2,year.terrvis[nys]]))
+      ann.surv.terrvis[nys]<-pow(mean.phi.terrvis[1,year.terrvis[nys]],4)*pow(mean.phi.terrvis[1,year.terrvis[nys]],7)
     }
 
 ### 3.3 POPULATION GROWTH DERIVED FROM COUNTS    
@@ -849,12 +851,12 @@ INPUT <- list(y.terrvis = y.terrvis,
               nsite.terrvis = R.terrvis,
               nrep.terrvis = J.terrvis,
               nprim.terrvis = K.terrvis,
-              nyears.terrvis=max(yearindex.terrvis),
+              nyears.terrvis=max(yearindex.terrvis), #to reduce survival to 2 periods
               eff.terrvis=obseff.terrvis,
               psi1.terrvis=z.terrvis[,1],
               intv.terrvis=timeintervals.terrvis,
               parm.terrvis=survparm.terrvis,
-              year.terrvis=yearindex.terrvis,
+              year.terrvis=ifelse(yearindex.terrvis>9,2,1),   ## changed from annual survival to two periods 2006-2015, 2016 onwards
               
               y.count=trendinput$N,
               T.count=length(trendinput$N),		## year is standardized so that covariate values are not too far away from zero
@@ -945,7 +947,8 @@ for(k in 1:nrow(ymax.terrvis)){
 INPUT$z.terrvis<-z.obs.terrvis
 initIPM <- function(){list(z.terrvis = z.init.terrvis,
                          lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
-                         lm.phi.terrvis=matrix(runif(2*max(yearindex.terrvis),2, 5),ncol=max(yearindex.terrvis)),
+                         #lm.phi.terrvis=matrix(runif(2*max(yearindex.terrvis),2, 5),ncol=max(yearindex.terrvis)),
+                         mean.phi.terrvis=matrix(runif(2*2,0.95, 1),ncol=2),
                          sigma.obs.count=runif(1,0,10),
                          mu.fec = runif(2,0,1),
                          z.telemetry = cjs.init.z(INPUT$y.telemetry, INPUT$f.telemetry),
@@ -963,7 +966,7 @@ save.image("EGVU_IPM_input.RData")
 
 
 # MCMC settings
-nc <- 4
+nc <- 3
 nt <- 4
 ni <- 50000
 nb <- 10000
@@ -991,11 +994,11 @@ nb <- 10000
 #                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
-NeoIPM.ALL <- jags(data=INPUT,
+NeoIPM.ALL <- autojags(data=INPUT,
                    inits=initIPM,
                    parameters.to.save=paraIPM,
-                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_ExtendedProjection.jags",    ## was EGVU_IPM_2019_COMBINED.jags
-                   n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
+                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_ExtendedProjection.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                   n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
 
 # ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
 # NeoIPM.RED <- jags(data=INPUT,
