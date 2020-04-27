@@ -38,8 +38,9 @@
 ## include gradual improvement of survival (not immediate improvement) over next 5 years
 
 ### 22 NOVEMBER 2019: INCLUDED DATA FROM 2019
-
 ### 29 NOVEMBER 2019: re-instated chick removal model
+
+### 27 APRIL 2020: Included revised and corrected data from 2019 and modified model to allow changes in adult survival
 
 
 library(readxl)
