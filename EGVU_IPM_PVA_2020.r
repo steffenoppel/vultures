@@ -109,7 +109,6 @@ occu %>% filter(year>2005) %>%
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
@@ -122,7 +121,6 @@ birds<-birds %>% filter(Age %in% c("juv","2cal_year")) %>%
   filter(Tag_date<ymd("2019-10-01")) %>%
   filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
   filter(!release_method %in% c("hacking","fostering")) %>%            ### remove hacked and fostered birds as we will not use that technique
-  #filter(origin=="wild")     %>%               ### USE ONLY WILD JUVENILES
   dplyr::select(Name,Age,Tag_year,origin,release_method,Status,Fledge_date,Stop_date,Reason_death) %>%
   arrange(Tag_year) %>%
   
@@ -154,18 +152,9 @@ locs<- locs %>% filter(Bird_ID %in% birds$Name) %>%
   mutate(DateTime=ymd_hms(paste(Date,Time))) %>%
   mutate(Month=month(DateTime)) %>%
   mutate(PRIMOCC=paste(year(Date),Month, sep="_")) %>%     ## CREATE UNIQUE PRIMARY OCCASION (MONTH WITHIN YEARS)
-  #nest(long, lat, .key = "coords") %>%
   arrange(Bird_ID,DateTime) %>%
-  #group_by(Bird_ID) %>%
-  #mutate(prev_coords = lag(coords)) %>%
-  #ungroup() %>%
-  #mutate(distance = map2_dbl(coords, prev_coords, poss_dist)) %>%
-  #unnest(coords) %>%
   select(LocID,Bird_ID,Date,long,lat, PRIMOCC)
 head(locs)
-
-
-
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -200,77 +189,6 @@ EV.age.matrix[,2:max(timeseries$col)]<-NA
 EV.mig.matrix<-birds %>% select(Name) %>%
   arrange(Name)
 EV.mig.matrix[,2:max(timeseries$col)]<-0
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# LOAD DATA FROM SPREADSHEETS AND ASSIGN FINAL STATES OF EACH ANIMAL
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\EV.TV.Survival.Study"), silent=T) ## changed after re-cloning remote
-#EV<-fread("ev.tv.summary.proofed_RE4_migrantsonly.csv")   ## updated on 9 April 2020
-#EVcovar<-fread("ev.survival.prepared.csv")
-# names(EV)[1]<-'species'
-# head(EV)
-# dim(EV)
-# EV$id.tag = as.character(EV$id.tag)
-# EVcovar$id.tag = as.character(EVcovar$id.tag)
-# 
-# EV<-EV %>% filter(population=="balkans") %>%
-#   mutate(start=parse_date_time(start.date, c("mdy", "mdy HM")), end= parse_date_time(end.date, c("mdy", "mdy HM"))) %>%
-#   filter(!is.na(start)) %>%
-#   filter(species=="Neophron percnopterus") %>%
-#   filter(start<ymd_hm("2019-04-01 12:00")) %>%  ## remove birds only alive for a few months in 2019
-#   select(species,population,id.tag,sex,age.at.deployment,age.at.deployment.month,captive.raised,rehabilitated, start, end, fate, how.fate.determined.clean, mean.GPS.dist.last10fixes.degrees)
-# head(EV)
-# dim(EV)
-
-
-#EV<-EV %>%
-
-# True States (S) - these are often unknown and cannot be observed, we just need them to initialise the model (best guess)
-# 1 dead
-# 2 alive with functioning tag
-# 3 alive with defunct tag OR without tag (when tag was lost)
-# 
-#   mutate(TS= ifelse(fate=="alive",2,
-#                     ifelse(fate %in% c("confirmed dead","likely dead","unknown"),1,3))) %>%
-#   # mutate(OS= ifelse(fate=="alive",1,
-#   #                   ifelse(fate %in% c("unknown","suspected transmitter failure"),5,
-#   #                          ifelse(fate=="verified transmitter failure",3,
-#   #                                 ifelse(fate=="dead",4,
-#   #                                        ifelse(fate=="suspected mortality",2,5)))))) %>%
-# 
-# # Observed States (O) - these are based on the actual transmission history
-# # 1 Tag ok, bird moving
-# # 2 Tag ok, bird not moving (dead)
-# # 3 Tag failed, bird observed alive
-# # 4 Dead bird recovered
-# # 5 No signal (=not seen)
-#   mutate(OS= ifelse(fate=="alive",1,
-#                     ifelse(fate %in% c("unknown","likely transmitter failure"),5,
-#                            ifelse(fate=="confirmed transmitter failure",3,
-#                                   ifelse(how.fate.determined.clean %in% c("carcass found","resighted / recaptured","transmitter recovered"),4,2))))) %>%
-#   arrange(id.tag)
-# 
-# head(EV)
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# CREATE CAPTURE HISTORY FOR SURVIVAL ESTIMATIONS
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-### CREATE A TIME SERIES DATA FRAME ###
-# mindate<-min(EV$start)
-# maxdate<-max(EV$end)
-# timeseries<-data.frame(date=seq(mindate, maxdate, "1 month")) %>%
-#   mutate(month=month(date),year=year(date)) %>%
-#   mutate(date=format(date, format="%m-%Y")) %>%
-#   mutate(season=ifelse(month %in% c(2,3,4,9,10), 'migration',ifelse(month %in% c(11,12,1),"winter","summer"))) %>%
-#   mutate(col=seq_along(date)+1)
-# dim(timeseries)
-
 
 ### FILL MATRICES WITH STATE INFORMATION ###
 for(n in EV.obs.matrix$Name){
@@ -354,19 +272,6 @@ get.first.telemetry<-function(x)min(which(!is.na(x)))
 get.last.telemetry<-function(x)max(which(!is.na(x) & x==1))
 f.telemetry<-apply(y.telemetry,1,get.first.telemetry)
 l.telemetry<-apply(y.telemetry,1,get.last.telemetry)
-
-
-#### Bundle data FOR JAGS MODEL RUN and save workspace
-#### BUNDLE DATA INTO A LIST
-INPUT.telemetry <- list(y = y.telemetry,
-                        f = f.telemetry,
-                        l = l.telemetry,
-                        age = matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)),
-                        capt = ifelse(birds$origin=="wild",0,1),
-                        mig = mig.mat,
-                        nind = dim(y.telemetry)[1],
-                        n.occasions = dim(y.telemetry)[2])
-
 
 rm(locs)
 
@@ -604,8 +509,7 @@ model {
 #-------------------------------------------------
 
 # Priors and constraints FOR FECUNDITY
-    mu.fec[1] ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
-    mu.fec[2] ~ dunif(0,1)       # Priors on fecundity after removing 2nd egg can range from 0-1 chick per pair (uninformative)    
+    mu.fec ~ dunif(0,2)           # Priors on fecundity can range from 0- 2 chicks per pair (uninformative)
 
 # Priors and constraints FOR POPULATION COUNTS OBSERVATION
     sigma.obs.count ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
@@ -703,7 +607,7 @@ model {
     
 for (tt in 2:T.count){
 
-    nestlings[tt] <- mu.fec[1] * 0.5 * Nterr[tt]                                                              ### number of local recruits
+    nestlings[tt] <- mu.fec * 0.5 * Nterr[tt]                                                              ### number of local recruits
     N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(nestlings[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
     N2[tt] ~ dbin(ann.phi.sec.telemetry, round(N1[tt-1]))                                                      ### number of 2-year old survivors
     N3[tt] ~ dbin(ann.phi.third.telemetry, round(N2[tt-1]))                                                    ### number of 3-year old survivors
@@ -730,8 +634,7 @@ for (tt in 2:T.count){
 # -------------------------------------------------
     #for (t in 1:nyear.fec){
       J.fec[tlc] ~ dpois(rho.fec[tlc])
-      rho.fec[tlc] <- R.fec[tlc]*mu.fec[1]
-      J.fec.red[tlc] ~ dbin(mu.fec[2],R.fec[tlc])
+      rho.fec[tlc] <- R.fec[tlc]*mu.fec
     } #	close loop over every year in which we have count and fecundity data
 
 
@@ -876,21 +779,14 @@ for (captageprog in 1:36){
 # 4. PREDICTION INTO THE FUTURE
 # -------------------------------------------------
 ### INCLUDE SCENARIOS FOR N CAPTIVE BIRDS AND SURVIVAL IMPROVEMENT
-### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
-### INCLUDE THE RESCUE OF 9 chicks and release with increased survival
-
-
 
     # CAPTIVE RELEASE OF JUVENILE BIRDS
     for (ncr in 1:scen.capt.release){
 
-      ### FUTURE FECUNDITY IS BASED ON mu.fec[1] for no action scenario and mu.fec[2] when there is captive-released birds
+      ### FUTURE FECUNDITY IS BASED ON mu.fec - removed the chick removal scenario
 
-      for (fut in 1:5){
-        fut.fec[fut,ncr] <-mu.fec[min(capt.release[fut,ncr]+1,2)]  ## this will be mu.fec[1] for 0 capt.release and mu.fec[2] when captive birds are released for first 5 years all second chicks are taken into captivity
-      }
-      for (fut in 6:PROJECTION){
-        fut.fec[fut,ncr] <-mu.fec[1]  ## no chicks taken after 5 years anymore
+      for (fut in 1:PROJECTION){
+        fut.fec[fut,ncr] <-mu.fec  ## no chicks taken after 5 years anymore
       }
 
 
@@ -1014,7 +910,7 @@ INPUT <- list(y.terrvis = enchist.terrvis,
 
               R.fec=breedinput$R,
               J.fec=breedinput$J,
-              J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
+              #J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
 
               y.telemetry = y.telemetry,
               f.telemetry = f.telemetry,
@@ -1026,11 +922,11 @@ INPUT <- list(y.terrvis = enchist.terrvis,
               y.telemetry = y.telemetry,
               f.telemetry = f.telemetry,
               l.telemetry = l.telemetry,
-              age.telemetry = age.mat ### matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)), ##scaling age would be a pain for internal transformation
+              age.telemetry = age.mat, ### matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)), ##scaling age would be a pain for internal transformation
               capt.telemetry = ifelse(birds$origin=="wild",0,1),
               mig.telemetry = mig.mat,
               nind.telemetry = dim(y.telemetry)[1],
-              n.occasions.telemetry = dim(y.telemetry)[2]),
+              n.occasions.telemetry = dim(y.telemetry)[2],
               migprog.age = c(0,1,rep(0,34)), ## specifies when first migration occurs
               captprog.age =c(0,0,0,0,0,0,0,0,0,0,1,rep(0,25)),
               
@@ -1048,12 +944,9 @@ INPUT <- list(y.terrvis = enchist.terrvis,
 ## Parameters to be estimated ('monitored') by JAGS
 paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.capt.rel.first.year",
            "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
-            "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
+            "mean.phi.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
           
 
-
-# Initial values for some parameters
-inits.telemetry <- function(){list(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SPECIFY INITIAL VALUES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1111,10 +1004,8 @@ for(k in 1:nrow(ymax.terrvis)){
 
 ### MODEL WITH RANDOM EFFECTS
 INPUT$z.terrvis<-z.obs.terrvis
-initIPM <- function(){list(z.terrvis = z.init.terrvis,
-                         lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
-                         #lm.phi.terrvis=matrix(runif(2*max(yearindex.terrvis),2, 5),ncol=max(yearindex.terrvis)),
-                         mean.phi.terrvis=matrix(runif(2*2,0.95, 1),ncol=2),
+initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
+                           mean.phi.terrvis=runif(2,0.75, 1),
                          sigma.obs.count=runif(1,0,10),
                          mu.fec = runif(2,0,1),
                          z.telemetry = z.telemetry,
@@ -1128,55 +1019,28 @@ initIPM <- function(){list(z.terrvis = z.init.terrvis,
 rm.list<-data.frame(object=as.character(ls()), size=0)
 for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
 rm.list %>% arrange(size)
-rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat")))
+rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat","z.telemetry","z.obs.terrvis")))
 gc()
-save.image("EGVU_IPM_input.RData")
+save.image("EGVU_IPM_input_May2020.RData")
 
 
 # MCMC settings
 nc <- 3
 nt <- 4
-ni <- 50000
-nb <- 10000
+ni <- 500
+nb <- 100
 
-
-### THIS MODEL SIMPLY EXPLORES THE NO CHANGE SCENARIO AND QUANTIFIES FUTURE POPULATION TREND IF NOTHING IS DONE
-# NeoIPMbasic <- jags(data=INPUT,
-#                 inits=initIPM,
-#                 parameters.to.save=paraIPM,
-#                 model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_Baseline.jags",
-#                 n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
-
-# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND NO CHICKS ARE RELEASED  
-# NeoIPMeggredNoRescue <- jags(data=INPUT,
-#                        inits=initIPM,
-#                        parameters.to.save=paraIPM,
-#                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_NoRescue.jags",
-#                        n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
-
-# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND IF FOR 5 YEARS ALL SECOND EGGS ARE REMOVED AND CHICKS ARE RELEASED EVERY YEAR
-# NeoIPMeggredRescue <- jags(data=INPUT,
-#                     inits=initIPM,
-#                     parameters.to.save=paraIPM,
-#                     model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_EggRem5_WithRescue.jags",
-#                     n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
 
 ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
 NeoIPM.ALL <- autojags(data=INPUT,
                    inits=initIPM,
                    parameters.to.save=paraIPM,
-                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_ExtendedProjection.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v1.jags",    ## was EGVU_IPM_2019_COMBINED.jags
                    n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
 
-# ### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF SURVIVAL IMPROVEMENT WITH CAPTIVE RELEASES ONLY IN THE FIRST 5-10 YEARS
-# NeoIPM.RED <- jags(data=INPUT,
-#                            inits=initIPM,
-#                            parameters.to.save=paraIPM,
-#                            model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2019_REDRELEASE.jags",
-#                            n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb, parallel=T)
-  
 
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM_output_v5.RData")
+
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
 
 
 
