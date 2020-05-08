@@ -671,7 +671,7 @@ for (tt in 2:T.count){
           po[1,i,t,2]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t]) * (1-p.found.dead.telemetry[i,t])
           po[1,i,t,3]<-0
           po[1,i,t,4]<-p.found.dead.telemetry[i,t]
-          po[1,i,t,5]<-(1-p.obs[i,t]) * tag.fail.telemetry[i,t] * (1-p.found.dead.telemetry[i,t])
+          po[1,i,t,5]<-(1-p.obs.telemetry[i,t]) * tag.fail.telemetry[i,t] * (1-p.found.dead.telemetry[i,t])
     
           po[2,i,t,1]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
           po[2,i,t,2]<-0
@@ -708,7 +708,7 @@ for (tt in 2:T.count){
     ### ECOLOGICAL STATE MODEL WITH ESTIMATE OF SURVIVAL
     
     for (ilterr in 1:nsite.terrvis){
-      z.terrvis[ilterr,f.obsvis[ilterr]] <- firstobs[ilterr]
+      #z.terrvis[ilterr,f.obsvis[ilterr]] <- firstobs[ilterr]
     
       for (klterr in (f.obsvis[ilterr]+1):nprim.terrvis){
         z.terrvis[ilterr,klterr] ~ dbin(mean.phi.terrvis[phase[klterr]],z.terrvis[ilterr,klterr-1])
@@ -746,9 +746,9 @@ for (ageprog in 1:36){
                                       b.phi.age*ageprog     ### survival dependent on age (juvenile or other)
 }
 
-  ann.phi.juv.telemetry<-pow(phi.wild.telemetry[1:12])						### multiply monthly survival from age 1-12
-  ann.phi.sec.telemetry<-pow(phi.wild.telemetry[13:24])	
-  ann.phi.third.telemetry<-pow(phi.wild.telemetry[25:36])
+  ann.phi.juv.telemetry<-phi.wild.telemetry[1]*phi.wild.telemetry[2]*phi.wild.telemetry[3]*phi.wild.telemetry[4]*phi.wild.telemetry[5]*phi.wild.telemetry[6]*phi.wild.telemetry[7]*phi.wild.telemetry[8]*phi.wild.telemetry[9]*phi.wild.telemetry[10]*phi.wild.telemetry[11]*phi.wild.telemetry[12]					### multiply monthly survival from age 1-12
+  ann.phi.sec.telemetry<-phi.wild.telemetry[13]*phi.wild.telemetry[14]*phi.wild.telemetry[15]*phi.wild.telemetry[16]*phi.wild.telemetry[17]*phi.wild.telemetry[18]*phi.wild.telemetry[19]*phi.wild.telemetry[20]*phi.wild.telemetry[21]*phi.wild.telemetry[22]*phi.wild.telemetry[23]*phi.wild.telemetry[24]					### multiply monthly survival from age 13-24
+  ann.phi.third.telemetry<-phi.wild.telemetry[25]*phi.wild.telemetry[26]*phi.wild.telemetry[27]*phi.wild.telemetry[28]*phi.wild.telemetry[29]*phi.wild.telemetry[30]*phi.wild.telemetry[31]*phi.wild.telemetry[32]*phi.wild.telemetry[33]*phi.wild.telemetry[34]*phi.wild.telemetry[35]*phi.wild.telemetry[36]					### multiply monthly survival from age 25-36
 
 ## for CAPTIVE-REARED DELAYED RELEASE BIRDS
 for (captageprog in 1:36){
@@ -758,8 +758,7 @@ for (captageprog in 1:36){
                                             b.phi.age*captageprog     ### survival dependent on age (juvenile or other)
   }
 
-  ann.phi.capt.rel.first.year<-pow(phi.capt.telemetry[8:24])						### first year for delayed-release bird is longer, but then aligns with 
-
+  ann.phi.capt.rel.first.year<-phi.capt.telemetry[8]*phi.capt.telemetry[9]*phi.capt.telemetry[10]*phi.capt.telemetry[11]*phi.capt.telemetry[12]*phi.capt.telemetry[13]*phi.capt.telemetry[14]*phi.capt.telemetry[15]*phi.capt.telemetry[16]*phi.capt.telemetry[17]*phi.capt.telemetry[18]*phi.capt.telemetry[19]*phi.capt.telemetry[20]*phi.capt.telemetry[21]*phi.capt.telemetry[22]*phi.capt.telemetry[23]*phi.capt.telemetry[24]					### first year for delayed-release bird is longer, from month 8 to 24 
 
 ### 3.2 POPULATION GROWTH DERIVED FROM COUNTS    
 
@@ -989,7 +988,7 @@ INPUT$z.terrvis<-z.obs.terrvis
 initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
                            mean.phi.terrvis=runif(2,0.75, 1),
                          sigma.obs.count=runif(1,0,10),
-                         mu.fec = runif(2,0,1),
+                         mu.fec = runif(1,0,1),
                          z.telemetry = z.telemetry,
                          mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
                          base.obs.telemetry = rnorm(1,0, 0.001),                # Prior for intercept of observation probability on logit scale
@@ -997,13 +996,13 @@ initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
                          base.recover.telemetry = rnorm(1,0, 0.001))}   
 
 
-### REDUCE WORKSPACE FOR RUNNING MODEL
-rm.list<-data.frame(object=as.character(ls()), size=0)
-for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
-rm.list %>% arrange(size)
-rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat","z.telemetry","z.obs.terrvis")))
-gc()
-save.image("EGVU_IPM_input_May2020.RData")
+# ### REDUCE WORKSPACE FOR RUNNING MODEL
+# rm.list<-data.frame(object=as.character(ls()), size=0)
+# for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
+# rm.list %>% arrange(size)
+# rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat","z.telemetry","z.obs.terrvis")))
+# gc()
+# save.image("EGVU_IPM_input_May2020.RData")
 
 
 # MCMC settings
