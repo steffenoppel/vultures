@@ -438,33 +438,6 @@ EGVUsum <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
 head(EGVUsum)
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SET UP SIMPLE ENCOUNTER HISTORY AND EFFORT MATRIX
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-enc.terrvis <- EGVUsum %>%
-  group_by(terrnum, Year) %>%
-  summarise(occ=max(N,na.rm=T)) %>%
-  spread(key=Year, value=occ, fill = 0) %>%
-  arrange(terrnum)
-
-obs.terrvis <- EGVUsum %>%
-  group_by(terrnum, Year) %>%
-  summarise(effort=sum(effort,na.rm=T)) %>%
-  spread(key=Year, value=effort, fill = 0) %>%
-  arrange(terrnum)
-
-enchist.terrvis<-as.matrix(enc.terrvis[,2:dim(enc.terrvis)[2]])
-effort.terrvis<-as.matrix(obs.terrvis[,2:dim(obs.terrvis)[2]])
-
-# Create vector with first occasion of observation
-get.first.terrvis <- function(x) min(which(x>0))
-f.obsvis <- apply(effort.terrvis, 1, get.first.terrvis)
-first.obs <- vector()
-for (l in 1:dim(enchist.terrvis)[1]){
-  first.obs[l]<-enchist.terrvis[l,f.obsvis[l]]
-}
-
 
 # Function to create a matrix of initial values for latent state z
 cjs.init.z <- function(ch,f){
@@ -481,6 +454,122 @@ cjs.init.z <- function(ch,f){
 
 
 
+enc.terrvis <- EGVUsum %>%
+  group_by(terrnum, Year) %>%
+  summarise(occ=max(N,na.rm=T)) %>%
+  spread(key=Year, value=occ, fill = 0) %>%
+  arrange(terrnum)
+
+obs.terrvis <- EGVUsum %>%
+  group_by(terrnum, Year) %>%
+  summarise(effort=sum(effort,na.rm=T)) %>%
+  spread(key=Year, value=effort, fill = 0) %>%
+  arrange(terrnum)
+
+z.terrvis<-as.matrix(enc.terrvis[,2:dim(enc.terrvis)[2]])
+z.obsvis<-as.matrix(obs.terrvis[,2:dim(obs.terrvis)[2]])
+
+# Create vector with first occasion of observation
+get.first.terrvis <- function(x) min(which(x>0))
+f.obsvis <- apply(z.obsvis, 1, get.first.terrvis)
+first.obs <- vector()
+for (l in 1:dim(z.terrvis)[1]){
+  first.obs[l]<-z.terrvis[l,f.obsvis[l]]
+}
+
+enc.terrvis[(f.obsvis>12),]
+enc.terrvis[(first.obs==0),]
+obs.terrvis[(first.obs==0),]
+get.first.terrvis(z.obsvis[32,])
+
+
+
+get.last.terrvis <- function(x) max(which(x>0))
+l.obsvis <- apply(as.matrix(obs.terrvis[32,2:dim(enc.terrvis)[2]]), 1, get.last.terrvis)
+
+# Create vector with last occasion of observation 
+get.last.terrvis <- function(x) max(which(x==1))
+f.terrvis <- apply(z.terrvis, 1, get.last.terrvis)
+
+# Create vector with last occasion of observation of two birds
+get.last2.terrvis <- function(x) max(which(x==2))
+f2.terrvis <- apply(z.terrvis, 1, get.last2.terrvis)
+
+# Ensure that state=1 until last observation
+for (l in 1:dim(z.terrvis)[1]){
+  if(f.terrvis[l]!="-Inf"){z.terrvis[l,(1:f.terrvis[l])]<-1}	# for all birds that were observed at least once set all occ to 1 before last observation
+}
+
+# Ensure that state=2 until last observation of two birds
+for (l in 1:dim(z.terrvis)[1]){
+  if(f2.terrvis[l]!="-Inf"){z.terrvis[l,(1:f2.terrvis[l])]<-2}	# for all birds that were observed at least once set all occ to 2 before last observation
+}
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# PREPARE DATA FOR JAGS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### FOUR ARRAYS NEEDED - FOR OBSERVATIONS AND FOR EFFORT, FOR PARAMETER AND FOR INTERVAL
+### EACH ARRAY HAS 3 dimensions for the number of sites (=territories), number of primary occasions and number of visits (=1 per MONTH)
+
+
+# PREPARING THE REQUIRED INPUT DATA:
+R.terrvis<-length(unique(EGVUsum$terrnum))		# Number of individuals (= Territory-year combinations)
+J.terrvis<-5						# Number of replicate surveys per year, one for each month from April to August
+K.terrvis<-length(unique(EGVUsum$Year))	# Number of primary occasions
+
+# Set up some required arrays
+site.terrvis <- 1:R.terrvis					# Sites
+primoccs.terrvis <- 1:K.terrvis					# primary occasions (months across years)
+
+# SET UP THE OBSERVATION DATA
+y.terrvis <- array(NA, dim = c(R.terrvis, J.terrvis, K.terrvis))	# Detection histories
+obseff.terrvis <- array(NA, dim = c(R.terrvis, J.terrvis, K.terrvis))	# observation effort
+
+
+# CREATE A FULL DATA FRAME WITH ONE VALUE PER TERRITORY, PRIMARY AND SECONDARY OCCASION
+## needs manual adjustment if number of primary occasions changes
+fullEV.terrvis<-data.frame(terrnum=rep(unique(EGVUsum$terrnum),K.terrvis*J.terrvis),
+                           Year=rep(unique(EGVUsum$Year),each=R.terrvis*J.terrvis),
+                           MONTH=rep(rep(seq(4,8,1),each=R.terrvis), K.terrvis)) %>%
+  left_join(EGVUsum,by=c("terrnum", "Year", "MONTH")) %>%
+  mutate(yearnum=as.numeric(Year)-2005) %>%
+  arrange(terrnum,Year,MONTH)
+head(fullEV.terrvis)
+
+
+
+# FILL IN ARRAYS FOR OBSERVATIONS AND COVARIATES
+for(k in 1:K.terrvis){
+  
+  dat.terrvis <- fullEV.terrvis %>% filter(yearnum==k) %>%				## filter(WEEK==k+12) 
+    select(terrnum, N, MONTH) %>%
+    spread(key=MONTH, value=N, fill = NA) %>%
+    arrange(terrnum)
+  
+  effdat.terrvis <- fullEV.terrvis %>% filter(yearnum==k) %>%				## filter(WEEK==k+12) 
+    select(terrnum, effort, MONTH) %>%
+    spread(key=MONTH, value=effort, fill = 0) %>%
+    arrange(terrnum)
+  
+  y.terrvis[,,k] <-as.matrix(dat.terrvis[,2:6])
+  obseff.terrvis[,,k] <-as.matrix(effdat.terrvis[,2:6])
+}
+
+
+# Standardize observation effort covariates
+mean.eff.terrvis <- mean(obseff.terrvis, na.rm = TRUE)
+sd.eff.terrvis <- sd(obseff.terrvis[!is.na(obseff.terrvis)])
+obseff.terrvis <- (obseff.terrvis-mean.eff.terrvis)/sd.eff.terrvis     # Standardise observation effort
+
+
+
+
+
+
+
 
 
 
@@ -493,7 +582,7 @@ cjs.init.z <- function(ch,f){
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
-sink("EGVU_IPM_2020_ExtendedProjection.jags")
+sink("EGVU_IPM_2020_v1.jags")
 cat("
 model {
 #-------------------------------------------------
@@ -562,6 +651,7 @@ model {
 
 # Priors and constraints FOR ADULT SURVIVAL FROM TERRITORY MONITORING
     
+
     ## Priors for detection probability
     # Det prob varies for each site, det prob on logit scale, around 0.05 - 0.95 on normal scale
     for (ipterr in 1:nsite.terrvis){
@@ -572,35 +662,23 @@ model {
     beta.obs.eff.terrvis ~ dnorm(0, 0.0001)
     
     
-    # Priors for survival for breeding and non-breeding season varies among years
-    ## monthly BREEDING SEASON survival must be greater than 88% on logit scale
-    ## monthly NON-BREEDING SEASON survival must be greater than 88% on logit scale
-
+    # Priors for survival
+    ## annual survival must be greater than 80% on logit scale
+    
     for (nypterr in 1:2){   ## only 2 survival periods
-      lm.phi.terrvis[1,nypterr] <- log(mean.phi.terrvis[1,nypterr]/(1 - mean.phi.terrvis[1,nypterr]))    # logit transformed survival intercept		      
-      lm.phi.terrvis[2,nypterr]  <- log(mean.phi.terrvis[2,nypterr]/(1 - mean.phi.terrvis[2,nypterr]))    # logit transformed survival intercept
-      mean.phi.terrvis[1,nypterr] ~ dunif(0.95, 1)   # uninformative prior for all MONTHLY survival probabilities
-      mean.phi.terrvis[2,nypterr] ~ dunif(0.95, 1)   # uninformative prior for all MONTHLY survival probabilities
+      lm.phi.terrvis[nypterr] <- log(mean.phi.terrvis[nypterr]/(1 - mean.phi.terrvis[nypterr]))    # logit transformed survival intercept		      
+      mean.phi.terrvis[nypterr] ~ dunif(0.75, 1)   # informative prior for annual survival probabilities BEFORE 2016
     }    
     
-
+    
     ### RANDOM OBSERVATION EFFECT FOR EACH TERRITORY AND YEAR
-
-    for (nyRpterr in 1:nyears.terrvis){
+    
+    for (nyRpterr in 1:nprim.terrvis){
       rand.obs.terrvis[nyRpterr] ~ dnorm(0, tau.obs.terrvis)
     }
     
     tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)
     sd.obs.terrvis ~ dunif(0, 3)
-    
-
-    ### RANDOM SURVIVAL EFFECT FOR EACH TERRITORY AND YEAR
-
-    for (ipterr2 in 1:nsite.terrvis){
-      rand.surv.terrvis[ipterr2] ~ dnorm(0, tau.surv.terrvis)
-    }
-    tau.surv.terrvis <- 1 / (sd.surv.terrvis * sd.surv.terrvis)
-    sd.surv.terrvis ~ dunif(0, 3)
     
 
 # Priors for population process and immigration
@@ -626,13 +704,12 @@ model {
 for (tt in 2:T.count){
 
     nestlings[tt] <- mu.fec[1] * 0.5 * Nterr[tt]                                                              ### number of local recruits
-    #JUV[tt] ~ dpois(nestlings[tt])                                                              ### need a discrete number otherwise dbin will fail
     N1[tt]  ~ dbin(ann.phi.juv.telemetry, round(nestlings[tt-1]))                                                    ### number of 1-year old survivors - add CAPT.ADD in here
     N2[tt] ~ dbin(ann.phi.sec.telemetry, round(N1[tt-1]))                                                      ### number of 2-year old survivors
     N3[tt] ~ dbin(ann.phi.third.telemetry, round(N2[tt-1]))                                                    ### number of 3-year old survivors
-    N4[tt] ~ dbin(ann.surv.terrvis[tt], round(N3[tt-1]))                                                       ### number of 4-year old survivors
-    N5[tt] ~ dbin(ann.surv.terrvis[tt], round(N4[tt-1]))                                                ### number of 5-year old survivors
-    N6[tt] ~ dbin(ann.surv.terrvis[tt], round((N5[tt-1]+N6[tt-1])))                                   ### number of 6-year or older (adult) birds
+    N4[tt] ~ dbin(mean.phi.terrvis[phase[tt]], round(N3[tt-1]))                                                       ### number of 4-year old survivors
+    N5[tt] ~ dbin(mean.phi.terrvis[phase[tt]], round(N4[tt-1]))                                                ### number of 5-year old survivors
+    N6[tt] ~ dbin(mean.phi.terrvis[phase[tt]], round((N5[tt-1]+N6[tt-1])))                                   ### number of 6-year or older (adult) birds
 
 } # tt
     
@@ -726,35 +803,29 @@ for (tt in 2:T.count){
 # -------------------------------------------------
 
     ### ECOLOGICAL STATE MODEL WITH ESTIMATE OF SURVIVAL
-
-    for (ilterr in 1:nsite.terrvis){
-        z.terrvis[ilterr,1] ~ dbin(1,psi1.terrvis[ilterr])
-        phi.terrvis[ilterr,1] <- 1
-        surv.terrvis[ilterr,1] <- 1
-        linphi.terrvis[ilterr,1] <- 0
     
-      for (klterr in 2:nprim.terrvis){
-        linphi.terrvis[ilterr,klterr] <-lm.phi.terrvis[parm.terrvis[klterr-1],year.terrvis[klterr]] + rand.surv.terrvis[ilterr] 
-        phi.terrvis[ilterr,klterr] <- 1 / (1 + exp(-linphi.terrvis[ilterr,klterr]))
-        surv.terrvis[ilterr,klterr] <- pow(phi.terrvis[ilterr,klterr],intv.terrvis[klterr-1])
-        z.terrvis[ilterr,klterr] ~ dbin(phi.terrvis[ilterr,klterr],z.terrvis[ilterr,klterr-1])
+    for (ilterr in 1:nsite.terrvis){
+      z.terrvis[ilterr,f.obsvis[ilterr]] <- firstobs[ilterr]
+    
+      for (klterr in (f.obsvis[ilterr]+1):nprim.terrvis){
+        z.terrvis[ilterr,klterr] ~ dbin(mean.phi.terrvis[phase[klterr]],z.terrvis[ilterr,klterr-1])
       } 						# close klterr loop over primary period  - years
     } 							# close ilterr loop over sites
     
     ### OBSERVATION MODEL WITH RANDOM EFFECT OF YEAR
-    ## observation prob depends on number of visits per week
-
+    ## observation prob depends on monthly observation effort
+    
     for (iobs in 1:nsite.terrvis){
-      for (jobs in 1:nrep.terrvis){
-        for (kobs in 1:nprim.terrvis){
-
-          linpred.terrvis[iobs,jobs,kobs] <- lmu.p.terrvis[iobs]+beta.obs.eff.terrvis*eff.terrvis[iobs,jobs,kobs] + rand.obs.terrvis[year.terrvis[kobs]]
+      for (kobs in f.obsvis[iobs]:nprim.terrvis){
+        for (jobs in 1:nrep.terrvis){
+    
+          linpred.terrvis[iobs,jobs,kobs] <- lmu.p.terrvis[iobs]+beta.obs.eff.terrvis*eff.terrvis[iobs,jobs,kobs] + rand.obs.terrvis[kobs]
           p.terrvis[iobs,jobs,kobs] <- 1 / (1 + exp(-linpred.terrvis[iobs,jobs,kobs]))
           y.terrvis[iobs,jobs,kobs] ~ dbin(p.terrvis[iobs,jobs,kobs], z.terrvis[iobs,kobs])
     
     
-        } 						# close kobs loop over primary periods
-      } 						 # close jobs loop over week visits
+        } 						# close kobs loop over monthly surveys
+      } 						 # close jobs loop over year
     } 							# close iobs loop over sites
     
 
@@ -787,22 +858,7 @@ for (captageprog in 1:36){
   ann.phi.capt.rel.first.year<-pow(phi.capt.telemetry[8:24])						### first year for delayed-release bird is longer, but then aligns with 
 
 
-    
-
-
-### 3.2 TERRITORY MONITORING DERIVED SURVIVAL AND RESIGHTING ESTIMATES
-
-    # Detection probability averaged across all sites and occasions
-    mean.p.terrvis <-mean(p.terrvis[,,])
-    
-    # Survival probability averaged across season and year
-    for (nys in 1:nyears.terrvis){
-      #breed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[1,year.terrvis[nys]]))
-      #nonbreed.surv.terrvis[nys]<- 1 / (1 + exp(-lm.phi.terrvis[2,year.terrvis[nys]]))
-      ann.surv.terrvis[nys]<-pow(mean.phi.terrvis[1,year.terrvis[nys]],4)*pow(mean.phi.terrvis[1,year.terrvis[nys]],7)
-    }
-
-### 3.3 POPULATION GROWTH DERIVED FROM COUNTS    
+### 3.2 POPULATION GROWTH DERIVED FROM COUNTS    
 
     # Annual population growth rate
     for (ipop in 1:(T.count-1)){
@@ -854,13 +910,12 @@ for (captageprog in 1:36){
         N5.f[ncr,is,1] <- N5[T.count]
         N6.f[ncr,is,1] <- N6[T.count]
         Nterr.f[ncr,is,1] <- Nterr[T.count]
-        #rescued[ncr,is,1] <- 0                ## we need to fill in a value to make the matrix complete, this is not actually used in any calculation
-        N1nestlings.f[ncr,is,1] <- 0
-        N1released.f[ncr,is,1] <- N1[T.count]
+        N2wild.f[ncr,is,1] <- 0
+        N2released.f[ncr,is,1] <- 0
 
           for (fut in 2:PROJECTION){
 
-            fut.survival[ncr,is,fut] <-min(imp.surv[fut,is]*mean(ann.surv.terrvis[1:nyears.terrvis]),1) ### invalid parent error if survival>1
+            fut.survival[ncr,is,fut] <-min(imp.surv[fut,is]*mean.phi.terrvis[2],1) ### invalid parent error if survival>1
 
             ### probabilistic formulation
             nestlings.f[ncr,is,fut] <- (fut.fec[fut,ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
@@ -991,7 +1046,7 @@ INPUT <- list(y.terrvis = enchist.terrvis,
 
 
 ## Parameters to be estimated ('monitored') by JAGS
-paraIPM<-c("mu.fec","lambda.t","mean.phi.telemetry","lp.mean.telemetry","b.phi.age","b.phi.capt","b.phi.mig",
+paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.capt.rel.first.year",
            "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
             "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
           
