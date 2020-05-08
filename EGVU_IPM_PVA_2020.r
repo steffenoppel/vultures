@@ -885,39 +885,21 @@ eff.scale<-scale(0:1993)
 
 ## Bundle data across all of the data sources
 
-INPUT <- list(y.terrvis = enchist.terrvis,
-              nsite.terrvis = nrow(enchist.terrvis),
-              nprim.terrvis = ncol(enchist.terrvis),
-              phase=c(1,1,1,1,1,1,2,2,2,2,2,2,2,2),  ## cutoff in 2012
-              eff.terrvis=scale(effort.terrvis),
+INPUT <- list(y.terrvis = y.terrvis,
+              nsite.terrvis = R.terrvis,
+              nrep.terrvis = J.terrvis,
+              nprim.terrvis = K.terrvis,
+              phase=c(1,1,1,1,1,1,1,1,1,1,2,2,2,2),
+              eff.terrvis=obseff.terrvis,
               firstobs=first.obs,
               f.obsvis=f.obsvis, 
 
-
-# INPUT <- list(y.terrvis = y.terrvis,
-#               nsite.terrvis = R.terrvis,
-#               nrep.terrvis = J.terrvis,
-#               nprim.terrvis = K.terrvis,
-#               nyears.terrvis=max(yearindex.terrvis), #to reduce survival to 2 periods
-#               eff.terrvis=obseff.terrvis,
-#               psi1.terrvis=z.terrvis[,1],
-#               intv.terrvis=timeintervals.terrvis,
-#               parm.terrvis=survparm.terrvis,
-#               year.terrvis=ifelse(yearindex.terrvis>9,2,1),   ## changed from annual survival to two periods 2006-2015, 2016 onwards
-              
               y.count=trendinput$N,
               T.count=length(trendinput$N),		## year is standardized so that covariate values are not too far away from zero
 
               R.fec=breedinput$R,
               J.fec=breedinput$J,
               #J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
-
-              y.telemetry = y.telemetry,
-              f.telemetry = f.telemetry,
-              nind.telemetry = dim(CH.telemetry)[1],
-              n.occasions.telemetry = dim(y.telemetry)[2],
-              z.telemetry = z.telemetry,
-              x.telemetry = x.telemetry,
 
               y.telemetry = y.telemetry,
               f.telemetry = f.telemetry,
