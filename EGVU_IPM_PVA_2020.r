@@ -527,10 +527,10 @@ model {
 #### MONTHLY SURVIVAL PROBABILITY
     for (i in 1:nind.telemetry){
       for (t in f.telemetry[i]:(n.occasions.telemetry)){
-        logit(phi[i,t]) <- lp.mean.telemetry +      ### intercept for mean survival 
-        b.phi.capt*(capt.telemetry[i]) +     ### survival dependent on captive-release (captive-raised or other)
-        b.phi.mig*(mig.telemetry[i,t]) +     ### survival dependent on captive-release (captive-raised or other)
-          b.phi.age*(age.telemetry[i,t])     ### survival dependent on age (juvenile or other)
+        logit(phi.telemetry[i,t]) <- lp.mean.telemetry +      ### intercept for mean survival 
+                                      b.phi.capt*(capt.telemetry[i]) +     ### survival dependent on captive-release (captive-raised or other)
+                                      b.phi.mig*(mig.telemetry[i,t]) +     ### survival dependent on first migration across the sea
+                                      b.phi.age*(age.telemetry[i,t])     ### survival dependent on age (juvenile or other)
       } #t
     } #i
     
@@ -677,47 +677,47 @@ for (tt in 2:T.count){
           ps[1,i,t,2]<-0
           ps[1,i,t,3]<-0
     
-          ps[2,i,t,1]<-(1-phi[i,t])
+          ps[2,i,t,1]<-(1-phi.telemetry[i,t])
           ps[2,i,t,2]<-phi.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
           ps[2,i,t,3]<-phi.telemetry[i,t] * tag.fail.telemetry[i,t]
     
-    ps[3,i,t,1]<-(1-phi.telemetry[i,t])
-    ps[3,i,t,2]<-0
-    ps[3,i,t,3]<-phi.telemetry[i,t]
+          ps[3,i,t,1]<-(1-phi.telemetry[i,t])
+          ps[3,i,t,2]<-0
+          ps[3,i,t,3]<-phi.telemetry[i,t]
     
-    # Define probabilities of O(t) [last dim] given S(t)  [first dim]
+        # Define probabilities of O(t) [last dim] given S(t)  [first dim]
     
-    po[1,i,t,1]<-0
-    po[1,i,t,2]<-p.obs[i,t] * (1-tag.fail.telemetry[i,t]) * (1-p.found.dead.telemetry[i,t])
-    po[1,i,t,3]<-0
-    po[1,i,t,4]<-p.found.dead.telemetry[i,t]
-    po[1,i,t,5]<-(1-p.obs[i,t]) * tag.fail.telemetry[i,t] * (1-p.found.dead.telemetry[i,t])
+          po[1,i,t,1]<-0
+          po[1,i,t,2]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t]) * (1-p.found.dead.telemetry[i,t])
+          po[1,i,t,3]<-0
+          po[1,i,t,4]<-p.found.dead.telemetry[i,t]
+          po[1,i,t,5]<-(1-p.obs[i,t]) * tag.fail.telemetry[i,t] * (1-p.found.dead.telemetry[i,t])
     
-    po[2,i,t,1]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
-    po[2,i,t,2]<-0
-    po[2,i,t,3]<-0
-    po[2,i,t,4]<-0
-    po[2,i,t,5]<-(1-p.obs.telemetry[i,t]) * tag.fail.telemetry[i,t]
+          po[2,i,t,1]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
+          po[2,i,t,2]<-0
+          po[2,i,t,3]<-0
+          po[2,i,t,4]<-0
+          po[2,i,t,5]<-(1-p.obs.telemetry[i,t]) * tag.fail.telemetry[i,t]
     
-    po[3,i,t,1]<-0
-    po[3,i,t,2]<-0
-    po[3,i,t,3]<-0
-    po[3,i,t,4]<-0
-    po[3,i,t,5]<-1
+          po[3,i,t,1]<-0
+          po[3,i,t,2]<-0
+          po[3,i,t,3]<-0
+          po[3,i,t,4]<-0
+          po[3,i,t,5]<-1
     
-    } #t
+      } #t
     } #i
     
     # Likelihood 
-    for (i in 1:nind){
-    # Define latent state at first capture
-    z[i,f[i]] <- 2 ## alive when first marked
-    for (t in (f[i]+1):n.occasions){
-    # State process: draw S(t) given S(t-1)
-    z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
-    # Observation process: draw O(t) given S(t)
-    y[i,t] ~ dcat(po[z[i,t], i, t-1,])
-    } #t
+    for (i in 1:nind.telemetry){
+      # Define latent state at first capture
+      z.telemetry[i,f.telemetry[i]] <- 2 ## alive when first marked
+        for (t in (f.telemetry[i]+1):n.occasions.telemetry){
+          # State process: draw S(t) given S(t-1)
+          z.telemetry[i,t] ~ dcat(ps[z.telemetry[i,t-1], i, t-1,])
+          # Observation process: draw O(t) given S(t)
+          y.telemetry[i,t] ~ dcat(po[z.telemetry[i,t], i, t-1,])
+      } #t
     } #i
 
 
@@ -765,9 +765,29 @@ for (tt in 2:T.count){
 
 ### 3.1 TELEMETRY DERIVED SURVIVAL ESTIMATES
 
-  ann.phi.juv.telemetry<-pow(beta.telemetry[1],3)*pow(beta.telemetry[2],9)						### adjust here if first year consists of two parameters
-  ann.phi.sec.telemetry<-pow(beta.telemetry[2],12)
-  ann.phi.third.telemetry<-pow(beta.telemetry[3],12)
+## for WILD BIRDS
+for (ageprog in 1:36){
+        logit(phi.wild.telemetry[ageprog]) <- lp.mean.telemetry +      ### intercept for mean survival 
+                                      b.phi.mig*(migprog.age[ageprog]) +     ### survival dependent on migration (first-time crossing of sea)
+                                      b.phi.age*ageprog     ### survival dependent on age (juvenile or other)
+}
+
+  ann.phi.juv.telemetry<-pow(phi.wild.telemetry[1:12])						### multiply monthly survival from age 1-12
+  ann.phi.sec.telemetry<-pow(phi.wild.telemetry[13:24])	
+  ann.phi.third.telemetry<-pow(phi.wild.telemetry[25:36])
+
+## for CAPTIVE-REARED DELAYED RELEASE BIRDS
+for (captageprog in 1:36){
+      logit(phi.capt.telemetry[captageprog]) <- lp.mean.telemetry +      ### intercept for mean survival
+                                            b.phi.capt +     ### survival dependent on captive-release (captive-raised or other)
+                                            b.phi.mig*(captprog.age[captageprog]) +     ### survival dependent on migration (first-time crossing of sea)
+                                            b.phi.age*captageprog     ### survival dependent on age (juvenile or other)
+  }
+
+  ann.phi.capt.rel.first.year<-pow(phi.capt.telemetry[8:24])						### first year for delayed-release bird is longer, but then aligns with 
+
+
+    
 
 
 ### 3.2 TERRITORY MONITORING DERIVED SURVIVAL AND RESIGHTING ESTIMATES
@@ -843,12 +863,11 @@ for (tt in 2:T.count){
             fut.survival[ncr,is,fut] <-min(imp.surv[fut,is]*mean(ann.surv.terrvis[1:nyears.terrvis]),1) ### invalid parent error if survival>1
 
             ### probabilistic formulation
-            #rescued[ncr,is,fut] ~ dpois(5) T(1,11)                                         ### number of chicks rescued and rehabilitated to improve survival FROM HARVESTING SECOND EGGS
             nestlings.f[ncr,is,fut] <- (fut.fec[fut,ncr] * 0.5 * Nterr.f[ncr,is,fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
-            N1nestlings.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
-            N1released.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(capt.release[fut,ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
-            N1.f[ncr,is,fut] <-  N1nestlings.f[ncr,is,fut] + N1released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
-            N2.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))  ### number of 2-year old survivors
+            N1.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors
+            N2wild.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))                ### number of 2-year old wild survivors
+            N2released.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.capt.rel.first.year),1),round(capt.release[fut,ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N2.f[ncr,is,fut] <-  N2wild.f[ncr,is,fut] + N2released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
             N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
             N5.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round(N4.f[ncr,is,fut-1]))                                                       ### number of 5-year old survivors
@@ -952,11 +971,13 @@ INPUT <- list(y.terrvis = enchist.terrvis,
               y.telemetry = y.telemetry,
               f.telemetry = f.telemetry,
               l.telemetry = l.telemetry,
-              age.telemetry = matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)),
+              age.telemetry = age.mat ### matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)), ##scaling age would be a pain for internal transformation
               capt.telemetry = ifelse(birds$origin=="wild",0,1),
               mig.telemetry = mig.mat,
               nind.telemetry = dim(y.telemetry)[1],
               n.occasions.telemetry = dim(y.telemetry)[2]),
+              migprog.age = c(0,1,rep(0,34)), ## specifies when first migration occurs
+              captprog.age =c(0,0,0,0,0,0,0,0,0,0,1,rep(0,25)),
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
               PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
@@ -970,10 +991,14 @@ INPUT <- list(y.terrvis = enchist.terrvis,
 
 
 ## Parameters to be estimated ('monitored') by JAGS
-paraIPM<-c("mu.fec","lambda.t","ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
+paraIPM<-c("mu.fec","lambda.t","mean.phi.telemetry","lp.mean.telemetry","b.phi.age","b.phi.capt","b.phi.mig",
+           "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
             "ann.surv.terrvis","mean.p.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
           
 
+
+# Initial values for some parameters
+inits.telemetry <- function(){list(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SPECIFY INITIAL VALUES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1037,9 +1062,11 @@ initIPM <- function(){list(z.terrvis = z.init.terrvis,
                          mean.phi.terrvis=matrix(runif(2*2,0.95, 1),ncol=2),
                          sigma.obs.count=runif(1,0,10),
                          mu.fec = runif(2,0,1),
-                         z.telemetry = cjs.init.z(INPUT$y.telemetry, INPUT$f.telemetry),
-                         beta.telemetry = runif(3, 0, 1),
-                         mean.p.telemetry = runif(1, 0.95, 1))}  
+                         z.telemetry = z.telemetry,
+                         mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
+                         base.obs.telemetry = rnorm(1,0, 0.001),                # Prior for intercept of observation probability on logit scale
+                         base.fail.telemetry = rnorm(1,0, 0.001),               # Prior for intercept of tag failure probability on logit scale
+                         base.recover.telemetry = rnorm(1,0, 0.001))}   
 
 
 ### REDUCE WORKSPACE FOR RUNNING MODEL
