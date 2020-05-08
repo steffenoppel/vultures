@@ -44,6 +44,11 @@
 ### saved as new file
 ### included new data on adult survival and changed priors
 
+### 8 May 2020: completely revised IPM to insert model components from adult survival exploration
+## switched to a robust-design annual survival CJS model with 5 visits per year (April-Aug)
+## juvenile survival adapted from Buechley et al. 2020 telemetry survival model
+## REMOVED EGG HARVEST SECTION
+
 library(readxl)
 library(jagsUI)
 library(tidyverse)
@@ -86,21 +91,6 @@ breedinput<- breed %>% filter(Year>2005) %>%
 #fwrite(trendinput,"EGVU_adult_counts.csv")
 #fwrite(breedinput,"EGVU_breeding_summary.csv")
 
-### MODIFY BREEDINPUT FOR EGG HARVEST ###
-
-breedinput1EGG<- breed %>% filter(Year>2005) %>%
-  rename(year=Year) %>%
-  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
-  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
-  filter(!is.na(breed_success)) %>%
-  mutate(count=1) %>%
-  mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
-  mutate(fledglings=ifelse(fledglings==2,1,fledglings)) %>%     ### remove the second egg and fledgling
-  group_by(year) %>%
-  summarise(R=sum(count), J=sum(fledglings))
-
-breedinput$J-breedinput1EGG$J
-
 ### numbers for manuscript
 breed %>% filter(Year>2005) %>%
   rename(year=Year) %>%
@@ -119,14 +109,63 @@ occu %>% filter(year>2005) %>%
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
 load("RODBC_EGVU_telemetry_input.RData")
-
+head(locs)
 head(birds)
-
 birds$Fledge_date[is.na(birds$Fledge_date)]<-birds$Tag_date[is.na(birds$Fledge_date)] ### fill in 'fledge' which equals tag date for wild non-juveniles
+unique(birds$Age)
+birds<-birds %>% filter(Age %in% c("juv","2cal_year")) %>%
+  filter(Tag_date<ymd("2019-10-01")) %>%
+  filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
+  filter(!release_method %in% c("hacking","fostering")) %>%            ### remove hacked and fostered birds as we will not use that technique
+  #filter(origin=="wild")     %>%               ### USE ONLY WILD JUVENILES
+  dplyr::select(Name,Age,Tag_year,origin,release_method,Status,Fledge_date,Stop_date,Reason_death) %>%
+  arrange(Tag_year) %>%
+  
+  
+  # True States (S) - these are often unknown and cannot be observed, we just need them to initialise the model (best guess)
+  # 1 dead
+  # 2 alive with functioning tag
+  # 3 alive with defunct tag OR without tag (when tag was lost)
+  
+  mutate(TS= ifelse(Status=="Alive",2,1)) %>%
+  
+  # Observed States (O) - these are based on the actual transmission history
+  # 1 Tag ok, bird moving
+  # 2 Tag ok, bird not moving (dead)
+  # 3 Tag failed, bird observed alive
+  # 4 Dead bird recovered
+  # 5 No signal (=not seen)
+  mutate(OS= ifelse(Status=="Alive",1,
+                    ifelse(Status=="Unknown",5,
+                           ifelse(Reason_death %in% c("unknown","Unknown"),2,4))))
+
+
+### CALCULATE DISTANCE BETWEEN SUCCESSIVE LOCATIONS ###
+## this approach takes way too long to compute and was removed on 30 April 2020 ##
+poss_dist <- possibly(geosphere::distm, otherwise = NA)
+locs<- locs %>% filter(Bird_ID %in% birds$Name) %>%
+  filter(!LocID %in% c(68850, 35863, 38421, 40832, 3238)) %>%						### manually enter non-sensical GPS locations to be excluded
+  mutate(Time=format(Time, format="%H:%M:%S")) %>%
+  mutate(DateTime=ymd_hms(paste(Date,Time))) %>%
+  mutate(Month=month(DateTime)) %>%
+  mutate(PRIMOCC=paste(year(Date),Month, sep="_")) %>%     ## CREATE UNIQUE PRIMARY OCCASION (MONTH WITHIN YEARS)
+  #nest(long, lat, .key = "coords") %>%
+  arrange(Bird_ID,DateTime) %>%
+  #group_by(Bird_ID) %>%
+  #mutate(prev_coords = lag(coords)) %>%
+  #ungroup() %>%
+  #mutate(distance = map2_dbl(coords, prev_coords, poss_dist)) %>%
+  #unnest(coords) %>%
+  select(LocID,Bird_ID,Date,long,lat, PRIMOCC)
+head(locs)
+
+
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -135,127 +174,199 @@ birds$Fledge_date[is.na(birds$Fledge_date)]<-birds$Tag_date[is.na(birds$Fledge_d
 
 ### CREATE A TIME SERIES DATA FRAME ###
 mindate<-min(locs$Date)
-maxdate<-max(locs$Date)
-timeseries<-data.frame(date=seq(mindate, maxdate, "1 month"), month=0, year=0)
-timeseries$month<-as.numeric(format(timeseries$date,"%m"))
-timeseries$year<-as.numeric(format(timeseries$date,"%Y"))
+maxdate<-max(locs$Date)+days(15)
+timeseries<-data.frame(date=seq(mindate, maxdate, "1 month")) %>%
+  mutate(month=month(date),year=year(date)) %>%
+  mutate(date=format(date, format="%m-%Y")) %>%
+  mutate(season=ifelse(month %in% c(2,3,4,9,10), 'migration',ifelse(month %in% c(11,12,1),"winter","summer"))) %>%
+  mutate(col=seq_along(date)+1)
 dim(timeseries)
 
-### CREATE A BLANK CAPTURE HISTORY for 5 years (60 months) for juvenile birds ###
 
-CH.telemetry<-birds %>%
-  filter(Age %in% c("juv","2cal_year","3cal_year","4cal_year")) %>%                   ### changed in 2019 to include immatures caught in Ethiopia
-  filter(Tag_date<ymd("2019-10-01")) %>%
-  select(Name,Tag_year, Age,origin) %>% 
-  filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
-  filter(origin=="wild")     %>%               ### USE ONLY WILD JUVENILES
-  arrange(Tag_year)
+### CREATE BLANK MATRICES TO HOLD INFORMATION ABOUT TRUE AND OBSERVED STATES ###
 
-CH.telemetry[,5:64]<-0									### NEEDS MANUAL ADJUSTMENT IF REPEATED FOR LONGER TIME SERIES
-x.telemetry<-as.matrix(CH.telemetry[,5:64]) ### create matrix with age progression
+EV.obs.matrix<-birds %>% select(Name) %>%
+  arrange(Name)
+EV.obs.matrix[,2:max(timeseries$col)]<-NA									
 
-dim(CH.telemetry)
-range(CH.telemetry$Tag_year)
+EV.state.matrix<-birds %>% select(Name) %>%
+  arrange(Name)
+EV.state.matrix[,2:max(timeseries$col)]<-NA
 
-### FILL CAPTURE HISTORY WITH LIVE DEAD INFORMATION ###
-### THIS MAY REQUIRE A FIX IN THE FUTURE IF BIRDS THAT ARE STILL ALIVE HAVE NOT BEEN TAGGED > 4 YEARS AGO
-### WOULD NEED FILLING WITH NA
+EV.age.matrix<-birds %>% select(Name) %>%
+  arrange(Name)
+EV.age.matrix[,2:max(timeseries$col)]<-NA
+
+EV.mig.matrix<-birds %>% select(Name) %>%
+  arrange(Name)
+EV.mig.matrix[,2:max(timeseries$col)]<-0
 
 
-for(n in CH.telemetry$Name){
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# LOAD DATA FROM SPREADSHEETS AND ASSIGN FINAL STATES OF EACH ANIMAL
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\EV.TV.Survival.Study"), silent=T) ## changed after re-cloning remote
+#EV<-fread("ev.tv.summary.proofed_RE4_migrantsonly.csv")   ## updated on 9 April 2020
+#EVcovar<-fread("ev.survival.prepared.csv")
+# names(EV)[1]<-'species'
+# head(EV)
+# dim(EV)
+# EV$id.tag = as.character(EV$id.tag)
+# EVcovar$id.tag = as.character(EVcovar$id.tag)
+# 
+# EV<-EV %>% filter(population=="balkans") %>%
+#   mutate(start=parse_date_time(start.date, c("mdy", "mdy HM")), end= parse_date_time(end.date, c("mdy", "mdy HM"))) %>%
+#   filter(!is.na(start)) %>%
+#   filter(species=="Neophron percnopterus") %>%
+#   filter(start<ymd_hm("2019-04-01 12:00")) %>%  ## remove birds only alive for a few months in 2019
+#   select(species,population,id.tag,sex,age.at.deployment,age.at.deployment.month,captive.raised,rehabilitated, start, end, fate, how.fate.determined.clean, mean.GPS.dist.last10fixes.degrees)
+# head(EV)
+# dim(EV)
+
+
+#EV<-EV %>%
+
+# True States (S) - these are often unknown and cannot be observed, we just need them to initialise the model (best guess)
+# 1 dead
+# 2 alive with functioning tag
+# 3 alive with defunct tag OR without tag (when tag was lost)
+# 
+#   mutate(TS= ifelse(fate=="alive",2,
+#                     ifelse(fate %in% c("confirmed dead","likely dead","unknown"),1,3))) %>%
+#   # mutate(OS= ifelse(fate=="alive",1,
+#   #                   ifelse(fate %in% c("unknown","suspected transmitter failure"),5,
+#   #                          ifelse(fate=="verified transmitter failure",3,
+#   #                                 ifelse(fate=="dead",4,
+#   #                                        ifelse(fate=="suspected mortality",2,5)))))) %>%
+# 
+# # Observed States (O) - these are based on the actual transmission history
+# # 1 Tag ok, bird moving
+# # 2 Tag ok, bird not moving (dead)
+# # 3 Tag failed, bird observed alive
+# # 4 Dead bird recovered
+# # 5 No signal (=not seen)
+#   mutate(OS= ifelse(fate=="alive",1,
+#                     ifelse(fate %in% c("unknown","likely transmitter failure"),5,
+#                            ifelse(fate=="confirmed transmitter failure",3,
+#                                   ifelse(how.fate.determined.clean %in% c("carcass found","resighted / recaptured","transmitter recovered"),4,2))))) %>%
+#   arrange(id.tag)
+# 
+# head(EV)
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE CAPTURE HISTORY FOR SURVIVAL ESTIMATIONS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+### CREATE A TIME SERIES DATA FRAME ###
+# mindate<-min(EV$start)
+# maxdate<-max(EV$end)
+# timeseries<-data.frame(date=seq(mindate, maxdate, "1 month")) %>%
+#   mutate(month=month(date),year=year(date)) %>%
+#   mutate(date=format(date, format="%m-%Y")) %>%
+#   mutate(season=ifelse(month %in% c(2,3,4,9,10), 'migration',ifelse(month %in% c(11,12,1),"winter","summer"))) %>%
+#   mutate(col=seq_along(date)+1)
+# dim(timeseries)
+
+
+### FILL MATRICES WITH STATE INFORMATION ###
+for(n in EV.obs.matrix$Name){
   
-  ### extract locations and start and end dates for each bird
+  ### extract locations and start dates for each bird
   xl<-locs[locs$Bird_ID==n,]
   mindate<-as.Date(birds$Fledge_date[birds$Name==n])
   mindate<-dplyr::if_else(is.na(mindate),as.Date(min(xl$Date)),mindate)
   if(n %in% c("Elodie", "Odiseas")){mindate<-mindate-15}
+  mindate<-format(mindate, format="%m-%Y")
+  
+  ### extract end dates for each bird
   if(is.na(birds$Stop_date[birds$Name==n])){maxdate<-as.Date(max(xl$Date))}else{			### for birds that are still alive
-  maxdate<-as.Date(birds$Stop_date[birds$Name==n])}
-  birdseries<-data.frame(date=seq(mindate, maxdate, "1 month"), live=1)
-  stopcol<-length(birdseries$live)+4
-  stopcol<-ifelse(stopcol>64,64,stopcol)
-  CH.telemetry[CH.telemetry$Name==n,5:stopcol]<-birdseries$live[1:(stopcol-4)]
+    maxdate<-as.Date(birds$Stop_date[birds$Name==n])}
+  maxdate<-format(maxdate, format="%m-%Y")
   
-  ### adjust end for birds not tagged>5 years ago
-  if(stopcol<64){
-    if(birds$Status[birds$Name==n]=="Alive"){
-      CH.telemetry[CH.telemetry$Name==n,(stopcol+1):64]<-NA    ### set to NA because these occasions are in the future
-    }
-  } 
+  ### specify columns in matrix to populate
+  startcol<-timeseries$col[timeseries$date==mindate]
+  stopcol<-timeseries$col[timeseries$date==maxdate]
+  stopcol<-ifelse(stopcol<=startcol,min(startcol+1,max(timeseries$col)),stopcol)
   
-  ## find age of bird ##
-  xage<-CH.telemetry$Age[CH.telemetry$Name==n]
+  ## ASSIGN OBSERVED STATE
+  EV.obs.matrix[EV.obs.matrix$Name==n,startcol:(stopcol-1)]<-1
+  if(startcol==stopcol){EV.obs.matrix[EV.obs.matrix$Name==n,2:(stopcol-1)]<-NA} ## for the few cases where stopcol-1 is actually before startcol
+  EV.obs.matrix[EV.obs.matrix$Name==n,stopcol:max(timeseries$col)]<-birds$OS[birds$Name==n]   ## this assumes that state never changes - some birds may have gone off air and then been found dead - this needs manual adjustment!  
+  
+  ## ASSIGN INITIAL TRUE STATE (to initialise z-matrix of model)
+  EV.state.matrix[EV.state.matrix$Name==n,(startcol+1):(stopcol-1)]<-2      ## state at first capture is known, hence must be NA in z-matrix
+  EV.state.matrix[EV.state.matrix$Name==n,stopcol:max(timeseries$col)]<-birds$TS[birds$Name==n]    ## this assumes that state never changes - some birds may have gone off air and then been found dead - this needs manual adjustment!
+  EV.state.matrix[EV.state.matrix$Name==n,2:startcol]<-NA ## error occurs if z at first occ is not NA, so we need to specify that for birds alive for <1 month because stopcol-1 = startcol
+  
+  ## ASSIGN AGES FOR EACH MONTH
+  ## find age of bird at start of tracking ##
+  xage<-birds$Age[birds$Name==n]
   xage<-ifelse(xage=="juv",1,as.numeric(str_extract_all(xage,"\\(?[0-9]+\\)?", simplify=TRUE)))
-
+  xage<-ifelse(xage==1,1,ifelse(xage==2,9,18))
+  agelength<-length(seq(startcol:max(timeseries$col)))
+  EV.age.matrix[EV.age.matrix$Name==n,startcol:max(timeseries$col)]<-seq(xage,(xage+agelength-1))      ## insert age progression
   
-  ## create matrix of age progression
-  ## MIGRATION ENDS IN OCTOBER, so only 3 occ (Aug, Sept, Oct) in high risk category - extended to 5 months in 2019
-  ## survival assumed equal for first 5 months, then another 12 months, then until end
-  agechange1<-ifelse(xage==1,5,12)   ## define when bird switches to next age category
-  agechange2<-ifelse(xage==1,17,24)  ## define when bird switches to last (third age category)
-  
-  x.telemetry[CH.telemetry$Name==n,1:agechange1]<-as.numeric(min(xage,3))			## Set everything after the first occasion to age at marking, capped at 3
-  x.telemetry[CH.telemetry$Name==n,(agechange1+1):agechange2]<-as.numeric(min(xage+1,3))		## change to next age category, capped at 3
-  x.telemetry[CH.telemetry$Name==n,(agechange2+1):60]<-as.numeric(min(xage+2,3))				## change to third and last age category, capped at 3
-
-}
-
-y.telemetry<-as.matrix(CH.telemetry[,5:64])
-str(x.telemetry)
-
-## REPORT SAMPLE SIZE FOR N BIRDS DEAD WITHIN 10 MONTHS
-
-CH.telemetry[,1:14]
-
-
-#### Function to create a matrix with information about known latent state z
-state.telemetry <- y.telemetry
-known.telemetry<-y.telemetry[,1]															#### WE ASSUME THAT FATE OF ALL BIRDS IS KNOWN
-ch.telemetry<-state.telemetry
-for (i in 1:dim(ch.telemetry)[1]){
-  n1 <- min(which(ch.telemetry[i,]==1))
-  n2 <- max(which(ch.telemetry[i,]==1))
-  state.telemetry[i,n1:n2] <- 1
-  state.telemetry[i,1:n1] <- NA
-  if(n2<dim(ch.telemetry)[2]){
-    if(known.telemetry[i]==1){state.telemetry[i,(n2+1):dim(state.telemetry)[2]]<-0}else{state.telemetry[i,(n2+1):dim(state.telemetry)[2]]<-NA}
+  ## CALCULATE MIGRATION ACROSS THE SEA FROM LAT DISPLACEMENT FOR FIRST TIME MIGRANTS
+  lat.mat<-xl %>% mutate(date=format(Date, format="%m-%Y")) %>%
+    left_join(timeseries, by="date") %>% group_by(col) %>% summarise(latdiff=max(lat)-min(lat), latmax=max(lat)) %>%
+    mutate(age=seq_along(col)+xage-1) %>%
+    mutate(seacross=ifelse(age<18 & latdiff>1.5 & latmax>33,1,0)) %>%
+    select(col,seacross) %>%
+    spread(key=col,value=seacross, fill=0)
+  EV.mig.matrix[EV.age.matrix$Name==n,as.numeric(names(lat.mat))]<-lat.mat      ## insert migration
+  if(birds$Reason_death[birds$Name==n] %in% c("drowned","Natural barrier")){
+    EV.mig.matrix[EV.age.matrix$Name==n,max(as.numeric(names(lat.mat))):max(timeseries$col)]<-1
   }
-  state.telemetry[state.telemetry==0] <- NA
+  
 }
-z.telemetry<-state.telemetry
-z.telemetry<-as.matrix(z.telemetry)
 
 
-#### create vector of first marking (this is 1 by default)
-get.first.telemetry<-function(x)min(which(x!=0))
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE INPUT DATA FOR JAGS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### ENSURE SORT ORDER FOR ALL MATRICES IS IDENTICAL
+EV.obs.matrix <- EV.obs.matrix %>% arrange(Name)
+EV.state.matrix <- EV.state.matrix %>% arrange(Name)
+EV.age.matrix <- EV.age.matrix %>% arrange(Name)
+EV.mig.matrix <- EV.mig.matrix %>% arrange(Name)
+birds <- birds %>% arrange(Name)
+
+
+#### Convert to numeric matrices that JAGS can loop over
+y.telemetry<-as.matrix(EV.obs.matrix[,2:max(timeseries$col)])
+z.telemetry<-as.matrix(EV.state.matrix[,2:max(timeseries$col)])
+age.mat<-as.matrix(EV.age.matrix[,2:max(timeseries$col)])
+mig.mat<-as.matrix(EV.mig.matrix[,2:max(timeseries$col)])
+
+#### SCALE THE AGE SO THAT NUMERICAL OVERFLOW DOES NOT OCCUR
+max(age.mat, na.rm=T)
+age.mat<-ifelse(age.mat>48,48,age.mat)
+agescale<-scale(1:48)
+
+
+#### create vector of first marking and of last alive record
+get.first.telemetry<-function(x)min(which(!is.na(x)))
+get.last.telemetry<-function(x)max(which(!is.na(x) & x==1))
 f.telemetry<-apply(y.telemetry,1,get.first.telemetry)
+l.telemetry<-apply(y.telemetry,1,get.last.telemetry)
 
 
 #### Bundle data FOR JAGS MODEL RUN and save workspace
-INPUT.telemetry <- list(y.telemetry = y.telemetry, f.telemetry = f.telemetry, nind.telemetry = dim(CH.telemetry)[1], n.occasions.telemetry = dim(y.telemetry)[2], z.telemetry = z.telemetry, x.telemetry = x.telemetry)
-#rm(list=setdiff(ls(), "INPUT.telemetry"))
+#### BUNDLE DATA INTO A LIST
+INPUT.telemetry <- list(y = y.telemetry,
+                        f = f.telemetry,
+                        l = l.telemetry,
+                        age = matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)),
+                        capt = ifelse(birds$origin=="wild",0,1),
+                        mig = mig.mat,
+                        nind = dim(y.telemetry)[1],
+                        n.occasions = dim(y.telemetry)[2])
 
-
-
-#### Function to create a matrix of initial values for latent state z
-cjs.init.z <- function(ch,f){
-  for (i in 1:dim(ch)[1]){
-    if (sum(ch[i,],na.rm=T)==1) next
-    n2 <- max(which(ch[i,]==1))
-    ch[i,f[i]:n2] <- NA
-  }
-  for (i in 1:dim(ch)[1]){
-    ch[i,1:f[i]] <- NA
-  }
-  return(ch)
-}
-
-
-# Function to create a matrix of initial values for latent state z
-ch.init <- function(ch, f){
-  for (i in 1:dim(ch)[1]){ch[i,1:f[i]] <- NA}
-  return(ch)
-}
 
 rm(locs)
 
@@ -272,209 +383,102 @@ head(EGVU)
 dim(EGVU)
 
 
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FORMAT DATA AND FIX EFFORT TIMES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 head(EGVU)
 
 ### recalculate effort for visits that have observed >0 birds with 0 effort
-updDUR<-EGVU %>% filter(visit_duration==0) %>%
+updDUR<-EGVU %>% filter(visit_duration==0 | is.na(visit_duration)) %>%
   mutate(dur=as.numeric(difftime(time_end,time_start,units='hours'))) %>%
-  mutate(duration=ifelse(dur==0,0.1,dur)) %>%
+  mutate(duration=ifelse(dur==0,ifelse(n_adults>0,1,0.1),dur)) %>%
   select(survey_ID,territory_name,date,time_start,time_end,duration)
 EGVU$visit_duration[match(updDUR$survey_ID,EGVU$survey_ID)]<-updDUR$duration
 
+
 ### FORMAT AND SELECT RELEVANT COLUMNS
 EGVU<- EGVU %>%
-  filter(!is.na(visit_duration)) %>%
+  mutate(visit_duration=ifelse(is.na(visit_duration),n_adults,visit_duration)) %>%    ### fill in blanks assuming that effort was >0 when adults were seen
   filter(!is.na(n_adults)) %>%
-  filter(visit_duration!=0) %>% 
+  filter(visit_duration!=0) %>%
+  mutate(n_adults=ifelse(n_adults>2,2,n_adults)) %>%
   select(territory_name,date,visit_duration,n_adults) %>%
-  mutate(Year=year(date),JDAY=yday(date),WEEK=week(date), MONTH=month(date)) %>%
+  mutate(Year=year(date),JDAY=yday(date),MONTH=month(date)) %>%
   mutate(PRIMOCC=paste(Year,MONTH, sep="_")) %>%     ## CREATE UNIQUE PRIMARY OCCASION (MONTH WITHIN YEARS)
   filter(Year < 2020) %>%
-  filter(MONTH %in% c(4:8)) %>%
-  filter(WEEK %in% c(13:35))
+  filter(MONTH %in% c(4:8))
 
-dim(EGVU)
-head(EGVU)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # REMOVE UNOCCUPIED TERRITORIES ACROSS ALL YEARS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-maxocc<-aggregate(n_adults~territory_name, EGVU, FUN=max)
-remove<-maxocc[maxocc$n_adults==0,]
-names(remove)[2]<-"REMOVE"
-EGVU<-merge(EGVU,remove, by=c("territory_name"), all.x=T)
+remove<-EGVU %>% group_by(territory_name) %>% summarise(N=max(n_adults)) %>% filter(N==0)
+remove2<-EGVU %>% group_by(territory_name) %>% summarise(first=min(Year)) %>% filter(first>2018)
+EGVU<- EGVU %>% filter(!(territory_name %in% remove$territory_name)) %>% filter(!(territory_name %in% remove2$territory_name))
+EGVU<- droplevels(EGVU)
+
 dim(EGVU)
-EGVU<-EGVU[is.na(EGVU$REMOVE),]
-dim(EGVU)
-rm(maxocc, remove)
-EGVU$REMOVE<-NULL
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# CREATE A VISIT NUMBER FOR EACH TERRITORY, YEAR AND WEEK
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-EGVU$visit<-1
-
-for (t in unique(EGVU$territory_name)){
-  tx<-subset(EGVU, territory_name==t)
-  for (y in unique(tx$PRIMOCC)){
-    ty<-subset(tx, PRIMOCC==y)
-    
-    ty<-ty[order(ty$JDAY, decreasing=F),]
-    
-    EGVU$visit[EGVU$territory_name==t & EGVU$PRIMOCC==y] <- as.numeric(as.factor(ty$WEEK))		#rank(,ties.method= "min")
-  }}
-max(EGVU$visit)
-EGVU$visit[EGVU$visit>5]<-5
-
-
-### remove counts of >2 Adults and set to 2
-hist(EGVU$n_adults)
-EGVU$n_adults<-ifelse(EGVU$n_adults>2,2,EGVU$n_adults)
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# CREATE A CONTINUOUS NUMBER FOR YEAR AND TERRITORY (for random effects)
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 head(EGVU)
-EGVU$yearnum<-as.numeric(EGVU$Year)-2005
-territories<-unique(EGVU$territory_name)
-EGVU$terrnum<-match(EGVU$territory_name,territories)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SET UP STATE MATRIX FOR KNOWN STATE
+# CREATE MONTHLY VISITS FOR EACH TERRITORY AND YEAR
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Initial values for the state variable: observed occurrence
-# need to get ind in same order as y, otherwise init error because z and y order doesn't match
 
-## REPLACED 'WEEK' with 'MONTH' throughout on 10 April 2018
+EGVUsum <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
+  group_by(territory_name,Year,MONTH,PRIMOCC) %>%
+  summarise(N=max(n_adults, na.rm=T),effort=sum(visit_duration, na.rm=T)) %>%
+  ungroup() %>%
+  mutate(yearnum=as.numeric(Year)-2005) %>%
+  mutate(terrnum=as.numeric(territory_name)) %>%
+  arrange(territory_name)
 
-enc.terrvis <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
-  select(terrnum, n_adults, PRIMOCC) %>%
-  group_by(terrnum, PRIMOCC) %>%
-  summarise(OBS=max(n_adults, na.rm=T)) %>%
-  spread(key=PRIMOCC, value=OBS, fill = 0) %>%
+head(EGVUsum)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SET UP SIMPLE ENCOUNTER HISTORY AND EFFORT MATRIX
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+enc.terrvis <- EGVUsum %>%
+  group_by(terrnum, Year) %>%
+  summarise(occ=max(N,na.rm=T)) %>%
+  spread(key=Year, value=occ, fill = 0) %>%
   arrange(terrnum)
 
-## export data
-#fwrite(enc.terrvis,"EGVU_territory_observations.csv")
+obs.terrvis <- EGVUsum %>%
+  group_by(terrnum, Year) %>%
+  summarise(effort=sum(effort,na.rm=T)) %>%
+  spread(key=Year, value=effort, fill = 0) %>%
+  arrange(terrnum)
 
+enchist.terrvis<-as.matrix(enc.terrvis[,2:dim(enc.terrvis)[2]])
+effort.terrvis<-as.matrix(obs.terrvis[,2:dim(obs.terrvis)[2]])
 
-z.terrvis<-as.matrix(enc.terrvis[,c(2:dim(enc.terrvis)[2])])
-
-
-# Create vector with last occasion of observation 
-get.last.terrvis <- function(x) max(which(x==1))
-f.terrvis <- apply(z.terrvis, 1, get.last.terrvis)
-
-# Create vector with last occasion of observation of two birds
-get.last2.terrvis <- function(x) max(which(x==2))
-f2.terrvis <- apply(z.terrvis, 1, get.last2.terrvis)
-
-# Ensure that state=1 until last observation
-for (l in 1:dim(z.terrvis)[1]){
-  if(f.terrvis[l]!="-Inf"){z.terrvis[l,(1:f.terrvis[l])]<-1}	# for all birds that were observed at least once set all occ to 1 before last observation
-}
-
-# Ensure that state=2 until last observation of two birds
-for (l in 1:dim(z.terrvis)[1]){
-  if(f2.terrvis[l]!="-Inf"){z.terrvis[l,(1:f2.terrvis[l])]<-2}	# for all birds that were observed at least once set all occ to 2 before last observation
+# Create vector with first occasion of observation
+get.first.terrvis <- function(x) min(which(x>0))
+f.obsvis <- apply(effort.terrvis, 1, get.first.terrvis)
+first.obs <- vector()
+for (l in 1:dim(enchist.terrvis)[1]){
+  first.obs[l]<-enchist.terrvis[l,f.obsvis[l]]
 }
 
 
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# PREPARE DATA FOR JAGS
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### FOUR ARRAYS NEEDED - FOR OBSERVATIONS AND FOR EFFORT, FOR PARAMETER AND FOR INTERVAL
-### EACH ARRAY HAS 3 dimensions for the number of sites (=territories), number of primary occasions and number of visits (=1 per day)
-
-
-# PREPARING THE REQUIRED INPUT DATA:
-R.terrvis<-length(unique(EGVU$terrnum))		# Number of individuals (= Territory-year combinations)
-J.terrvis<-5						# Number of replicate surveys per month, changed from 7 before (WEEK)
-K.terrvis<-dim(z.terrvis)[2]	# Number of primary occasions
-
-# Set up some required arrays
-site.terrvis <- 1:R.terrvis					# Sites
-primoccs.terrvis <- 1:K.terrvis					# primary occasions (months across years)
-
-# SET UP THE OBSERVATION DATA
-y.terrvis <- array(NA, dim = c(R.terrvis, J.terrvis, K.terrvis))	# Detection histories
-obseff.terrvis <- array(NA, dim = c(R.terrvis, J.terrvis, K.terrvis))	# observation effort
-
-
-# CREATE A FULL DATA FRAME WITH ONE VALUE PER TERRITORY, PRIMARY AND SECONDARY OCCASION
-## needs manual adjustment if number of primary occasions changes
-fullEV.terrvis<-data.frame(terrnum=rep(unique(EGVU$terrnum),K.terrvis*J.terrvis),
-                           PRIMOCC=rep(names(enc.terrvis)[2:(K.terrvis+1)],each=R.terrvis*J.terrvis),
-                           visit=rep(rep(seq(1,J.terrvis,1),each=R.terrvis), K.terrvis))
-fullEV.terrvis<-merge(fullEV.terrvis, EGVU, by=c("terrnum", "PRIMOCC", "visit"), all.x=T)
-fullEV.terrvis$visit_duration[is.na(fullEV.terrvis$visit_duration)]<-0
-fullEV.terrvis$primnum<-match(fullEV.terrvis$PRIMOCC,names(enc.terrvis))-1
-head(fullEV.terrvis)
-
-
-
-# FILL IN ARRAYS FOR OBSERVATIONS AND COVARIATES
-for(k in 1:K.terrvis){
-  
-  dat.terrvis <- fullEV.terrvis %>% filter (primnum==k) %>%				## filter(WEEK==k+12) 
-    select(terrnum, n_adults, visit) %>%
-    group_by(terrnum, visit) %>%
-    summarise(OBS=max(n_adults)) %>%
-    spread(key=visit, value=OBS, fill = NA) %>%
-    arrange(terrnum)
-  
-  effdat.terrvis <- fullEV.terrvis %>% filter (primnum==k) %>%
-    select(terrnum, visit_duration, visit) %>%
-    #select(terrnum, JDAY, visit) %>%
-    group_by(terrnum, visit) %>%
-    summarise(EFF=sum(visit_duration)) %>%
-    #summarise(EFF=length(unique(JDAY))) %>%   ## this counts NA as 1 which is wrong
-    spread(key=visit, value=EFF, fill = 0) %>%
-    arrange(terrnum)
-  
-  y.terrvis[,,k] <-as.matrix(dat.terrvis[,2:6])
-  obseff.terrvis[,,k] <-as.matrix(effdat.terrvis[,2:6])
+# Function to create a matrix of initial values for latent state z
+cjs.init.z <- function(ch,f){
+  for (i in 1:dim(ch)[1]){
+    if (sum(ch[i,])>0) next
+    n2 <- max(which(ch[i,]>0))
+    ch[i,f[i]:n2] <- NA
+  }
+  for (i in 1:dim(ch)[1]){
+    ch[i,1:f[i]] <- NA
+  }
+  return(ch)
 }
 
-
-# Standardize observation effort covariates
-mean.eff.terrvis <- mean(obseff.terrvis, na.rm = TRUE)
-sd.eff.terrvis <- sd(obseff.terrvis[!is.na(obseff.terrvis)])
-obseff.terrvis <- (obseff.terrvis-mean.eff.terrvis)/sd.eff.terrvis     # Standardise observation effort
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SET UP VECTOR OF TIME INTERVALS AND PARAMETER VALUES
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-primlookup<-data.frame(PRIMOCC=names(enc.terrvis)[2:(K.terrvis+1)],primnum=primoccs.terrvis) %>%
-  mutate(YEAR=substring(PRIMOCC,1,4), MONTH=substring(PRIMOCC,6,6), DAY=15) %>%
-  mutate(middate=ymd(paste(YEAR,MONTH,DAY)))
-primlookup$nextdate<-c(primlookup$middate[2:dim(primlookup)[1]],NA)
-primlookup<-primlookup %>%
-  mutate(INTERVAL=interval(middate, nextdate) %/% months(1)) %>%
-  mutate(PARM=ifelse(INTERVAL>5,2,1))
-
-timeintervals.terrvis <- primlookup$INTERVAL[1:(K.terrvis-1)]	# time intervals between primary occasions
-survparm.terrvis <- primlookup$PARM[1:(K.terrvis-1)]	# parameter for survival - breeding or non-breeding
-yearindex.terrvis<-as.numeric(primlookup$YEAR)-2005
-
-
-### report sample size in manuscript
-dim(y.terrvis)
 
 
 
@@ -520,18 +524,40 @@ model {
 
 
 # Priors and constraints FOR JUVENILE SURVIVAL FROM TELEMETRY
-    for (iptel in 1:nind.telemetry){
-      for (tptel in f.telemetry[iptel]:(n.occasions.telemetry-1)){
-        phi.telemetry[iptel,tptel] <- beta.telemetry[x.telemetry[iptel,tptel]]
-        p.telemetry[iptel,tptel] <- mean.p.telemetry
-      } #tptel
-    } #iptel
-
-    for (utel in 1:3){					## change to 3 if > 2 years are modelled
-      beta.telemetry[utel] ~ dunif(0, 1)              # Priors for age-specific survival
-    }
-    mean.p.telemetry ~ dunif(0.95, 1)                  # Prior for mean resighting (very high, only when tag malfunctions)
-
+#### MONTHLY SURVIVAL PROBABILITY
+    for (i in 1:nind.telemetry){
+      for (t in f.telemetry[i]:(n.occasions.telemetry)){
+        logit(phi[i,t]) <- lp.mean.telemetry +      ### intercept for mean survival 
+        b.phi.capt*(capt.telemetry[i]) +     ### survival dependent on captive-release (captive-raised or other)
+        b.phi.mig*(mig.telemetry[i,t]) +     ### survival dependent on captive-release (captive-raised or other)
+          b.phi.age*(age.telemetry[i,t])     ### survival dependent on age (juvenile or other)
+      } #t
+    } #i
+    
+    #### BASELINE FOR SURVIVAL PROBABILITY (wild adult stationary from east)
+    mean.phi.telemetry ~ dunif(0.9, 1)   # uninformative prior for all MONTHLY survival probabilities
+    lp.mean.telemetry <- log(mean.phi.telemetry/(1 - mean.phi.telemetry))    # logit transformed survival intercept
+    
+    #### SLOPE PARAMETERS FOR SURVIVAL PROBABILITY
+    b.phi.age ~ dnorm(0, 0.001)           # Prior for COST OF MIGRATION migration on survival probability on logit scale
+    b.phi.capt ~ dnorm(0, 0.001)         # Prior for captive release on survival probability on logit scale
+    b.phi.mig ~ dunif(-2,0)         # Prior for captive release on survival probability on logit scale
+    
+    
+    #### TAG FAILURE AND LOSS PROBABILITY
+    for (i in 1:nind.telemetry){
+      for (t in f.telemetry[i]:(n.occasions.telemetry)){
+        logit(p.obs.telemetry[i,t]) <- base.obs.telemetry
+        logit(tag.fail.telemetry[i,t]) <- base.fail.telemetry
+        logit(p.found.dead.telemetry[i,t]) <- base.recover.telemetry
+      } #t
+    } #i
+    
+    
+    ##### SLOPE PARAMETERS FOR OBSERVATION PROBABILITY
+    base.obs.telemetry ~ dnorm(0, 0.001)                # Prior for intercept of observation probability on logit scale
+    base.fail.telemetry ~ dnorm(0, 0.001)               # Prior for intercept of tag failure probability on logit scale
+    base.recover.telemetry ~ dnorm(0, 0.001)               # Prior for intercept of tag failure probability on logit scale
 
 
 # Priors and constraints FOR ADULT SURVIVAL FROM TERRITORY MONITORING
@@ -637,23 +663,62 @@ for (tt in 2:T.count){
 # 2.4. Likelihood for juvenile survival from telemetry
 # -------------------------------------------------
  
-  for (iltel in 1:nind.telemetry){
-
+    # -------------------------------------------------
+    # Define state-transition and observation matrices 
+    # -------------------------------------------------
+    
+    for (i in 1:nind.telemetry){
+    
+      for (t in f.telemetry[i]:(n.occasions.telemetry-1)){
+    
+        # Define probabilities of state S(t+1) [last dim] given S(t) [first dim]
+    
+          ps[1,i,t,1]<-1    ## dead birds stay dead
+          ps[1,i,t,2]<-0
+          ps[1,i,t,3]<-0
+    
+          ps[2,i,t,1]<-(1-phi[i,t])
+          ps[2,i,t,2]<-phi.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
+          ps[2,i,t,3]<-phi.telemetry[i,t] * tag.fail.telemetry[i,t]
+    
+    ps[3,i,t,1]<-(1-phi.telemetry[i,t])
+    ps[3,i,t,2]<-0
+    ps[3,i,t,3]<-phi.telemetry[i,t]
+    
+    # Define probabilities of O(t) [last dim] given S(t)  [first dim]
+    
+    po[1,i,t,1]<-0
+    po[1,i,t,2]<-p.obs[i,t] * (1-tag.fail.telemetry[i,t]) * (1-p.found.dead.telemetry[i,t])
+    po[1,i,t,3]<-0
+    po[1,i,t,4]<-p.found.dead.telemetry[i,t]
+    po[1,i,t,5]<-(1-p.obs[i,t]) * tag.fail.telemetry[i,t] * (1-p.found.dead.telemetry[i,t])
+    
+    po[2,i,t,1]<-p.obs.telemetry[i,t] * (1-tag.fail.telemetry[i,t])
+    po[2,i,t,2]<-0
+    po[2,i,t,3]<-0
+    po[2,i,t,4]<-0
+    po[2,i,t,5]<-(1-p.obs.telemetry[i,t]) * tag.fail.telemetry[i,t]
+    
+    po[3,i,t,1]<-0
+    po[3,i,t,2]<-0
+    po[3,i,t,3]<-0
+    po[3,i,t,4]<-0
+    po[3,i,t,5]<-1
+    
+    } #t
+    } #i
+    
+    # Likelihood 
+    for (i in 1:nind){
     # Define latent state at first capture
-      z.telemetry[iltel,f.telemetry[iltel]] <- 1
-
-    for (tltel in (f.telemetry[iltel]+1):n.occasions.telemetry){
-
-    # State process
-      z.telemetry[iltel,tltel] ~ dbern(mu1.telemetry[iltel,tltel])
-      mu1.telemetry[iltel,tltel] <- phi.telemetry[iltel,tltel-1] * z.telemetry[iltel,tltel-1]
-
-    # Observation process
-      y.telemetry[iltel,tltel] ~ dbern(mu2.telemetry[iltel,tltel])
-      mu2.telemetry[iltel,tltel] <- p.telemetry[iltel,tltel-1] * z.telemetry[iltel,tltel]
-
-    } #tltel
-  } #iltel
+    z[i,f[i]] <- 2 ## alive when first marked
+    for (t in (f[i]+1):n.occasions){
+    # State process: draw S(t) given S(t-1)
+    z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
+    # Observation process: draw O(t) given S(t)
+    y[i,t] ~ dcat(po[z[i,t], i, t-1,])
+    } #t
+    } #i
 
 
 # -------------------------------------------------        
@@ -843,20 +908,32 @@ surv.inc.mat<- expand.grid(PROJECTION.years,imp.surv,lag.time) %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SET UP DATA AND INITIAL VALUES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## scale observation effort
 
+range(effort.terrvis)
+eff.scale<-scale(0:1993)
 
 ## Bundle data across all of the data sources
 
-INPUT <- list(y.terrvis = y.terrvis,
-              nsite.terrvis = R.terrvis,
-              nrep.terrvis = J.terrvis,
-              nprim.terrvis = K.terrvis,
-              nyears.terrvis=max(yearindex.terrvis), #to reduce survival to 2 periods
-              eff.terrvis=obseff.terrvis,
-              psi1.terrvis=z.terrvis[,1],
-              intv.terrvis=timeintervals.terrvis,
-              parm.terrvis=survparm.terrvis,
-              year.terrvis=ifelse(yearindex.terrvis>9,2,1),   ## changed from annual survival to two periods 2006-2015, 2016 onwards
+INPUT <- list(y.terrvis = enchist.terrvis,
+              nsite.terrvis = nrow(enchist.terrvis),
+              nprim.terrvis = ncol(enchist.terrvis),
+              phase=c(1,1,1,1,1,1,2,2,2,2,2,2,2,2),  ## cutoff in 2012
+              eff.terrvis=scale(effort.terrvis),
+              firstobs=first.obs,
+              f.obsvis=f.obsvis, 
+
+
+# INPUT <- list(y.terrvis = y.terrvis,
+#               nsite.terrvis = R.terrvis,
+#               nrep.terrvis = J.terrvis,
+#               nprim.terrvis = K.terrvis,
+#               nyears.terrvis=max(yearindex.terrvis), #to reduce survival to 2 periods
+#               eff.terrvis=obseff.terrvis,
+#               psi1.terrvis=z.terrvis[,1],
+#               intv.terrvis=timeintervals.terrvis,
+#               parm.terrvis=survparm.terrvis,
+#               year.terrvis=ifelse(yearindex.terrvis>9,2,1),   ## changed from annual survival to two periods 2006-2015, 2016 onwards
               
               y.count=trendinput$N,
               T.count=length(trendinput$N),		## year is standardized so that covariate values are not too far away from zero
@@ -871,6 +948,15 @@ INPUT <- list(y.terrvis = y.terrvis,
               n.occasions.telemetry = dim(y.telemetry)[2],
               z.telemetry = z.telemetry,
               x.telemetry = x.telemetry,
+
+              y.telemetry = y.telemetry,
+              f.telemetry = f.telemetry,
+              l.telemetry = l.telemetry,
+              age.telemetry = matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)),
+              capt.telemetry = ifelse(birds$origin=="wild",0,1),
+              mig.telemetry = mig.mat,
+              nind.telemetry = dim(y.telemetry)[1],
+              n.occasions.telemetry = dim(y.telemetry)[2]),
               
               ### Future Projection and SCENARIOS FOR TRAJECTORY
               PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
