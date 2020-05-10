@@ -270,7 +270,6 @@ for (captageprog in 1:36){
 
   ann.phi.capt.rel.first.year<-phi.capt.telemetry[8]*phi.capt.telemetry[9]*phi.capt.telemetry[10]*phi.capt.telemetry[11]*phi.capt.telemetry[12]*phi.capt.telemetry[13]*phi.capt.telemetry[14]*phi.capt.telemetry[15]*phi.capt.telemetry[16]*phi.capt.telemetry[17]*phi.capt.telemetry[18]*phi.capt.telemetry[19]*phi.capt.telemetry[20]*phi.capt.telemetry[21]*phi.capt.telemetry[22]*phi.capt.telemetry[23]*phi.capt.telemetry[24]					### first year for delayed-release bird is longer, from month 8 to 24 
 
-
 ### 3.2 POPULATION GROWTH DERIVED FROM COUNTS    
 
     # Annual population growth rate
