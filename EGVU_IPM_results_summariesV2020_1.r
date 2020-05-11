@@ -51,11 +51,21 @@ select<-dplyr::select
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #load("EGVU_IPM_output2019_v4.RData")
-load("EGVU_IPM2020_output_v1.RData")
-out<-as.data.frame(NeoIPM.ALL$summary)  ## changed from NeoIPMbasic
-out$parameter<-row.names(NeoIPM.ALL$summary) ## changed from NeoIPMbasic
-#write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
+load("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
 
+
+#### SELECT MODEL ###
+## 3 models were run, select the one for which output should be produced
+
+FOCMOD<-NeoIPM.ALL
+FOCMOD<-NeoIPM.chickremoval
+FOCMOD<-NeoIPM.chicksupplement
+
+
+### create data frame of model output
+out<-as.data.frame(FOCMOD$summary)  ## changed from NeoIPMbasic
+out$parameter<-row.names(FOCMOD$summary) ## changed from NeoIPMbasic
+#write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOOK UP SCENARIOS FROM MATRIX OF RELEASE AND SURVIVAL SCENARIOS
@@ -99,15 +109,15 @@ TABLE1<-out %>% filter(parameter %in% c('mean.lambda','mean.phi.terrvis[1]','mea
 
 
 # ## retrieve the adult survival estimates averaged across all years
-# selcol<-grep("mean.phi.terrvis",dimnames(NeoIPM.ALL$samples[[1]])[[2]])
+# selcol<-grep("mean.phi.terrvis",dimnames(FOCMOD$samples[[1]])[[2]])
 # ann.surv.terrvis<-numeric()
 # for (c in 1:nc){
-#   ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(NeoIPM.ALL$samples[[c]][,selcol]))
+#   ann.surv.terrvis<-c(ann.surv.terrvis,as.numeric(FOCMOD$samples[[c]][,selcol]))
 # }
 
 #TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
 names(TABLE1)<-c("Parameter","Median","lowerCL","upperCL")
-TABLE1$Parameter<-c("fecundity","delayed release first year survival","wild first year survival","wild second year survival", "wild third year survival","adult survival (before 2015)","adult survival (after 2015)","population growth rate")
+TABLE1$Parameter<-c("fecundity","delayed release first year survival","wild first year survival","wild second year survival", "wild third year survival","adult survival (before 2012)","adult survival (after 2012)","population growth rate")
 fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates_IPM2020_v1.csv")
 
 
@@ -118,10 +128,10 @@ fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates_IPM2020_v1.csv")
 
 
 ## retrieve the future lambdas
-selcol<-grep("fut.lambda",dimnames(NeoIPM.ALL$samples[[1]])[[2]])
-fut.lambda<-NeoIPM.ALL$samples[[1]][,selcol]
+selcol<-grep("fut.lambda",dimnames(FOCMOD$samples[[1]])[[2]])
+fut.lambda<-FOCMOD$samples[[1]][,selcol]
 for (c in 2:nc){
-  fut.lambda<-rbind(fut.lambda,NeoIPM.ALL$samples[[c]][,selcol])
+  fut.lambda<-rbind(fut.lambda,FOCMOD$samples[[c]][,selcol])
 }
 
 
@@ -317,14 +327,11 @@ ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1.jpg", width=10, height=8
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # GRAPH 4: EXTINCTION PROBABILITY OVER TIME WITHOUT RESCUED CHICKS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## OUTPUT FROM COMBINED MODEL
-## NO CHICK REMOVAL FOR BASELINE SCENARIO
-## CHICK REMOVAL FOR ALL SCENARIOS WITH CAPTIVE RELEASES
-# replaced NeoIPMeggredNoRescue with NeoIPM.ALL
+
 
 ### COMMENTED OUT ON 29 NOV 2019 - simply read in csv file
 
-rm(list=setdiff(ls(), c("NeoIPM.ALL","ncr.lu","surv.lu","trendinput")))
+rm(list=setdiff(ls(), c("FOCMOD","ncr.lu","surv.lu","trendinput")))
 
 
 ### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
@@ -334,13 +341,13 @@ for(scen in 1:nrow(ncr.lu)){
 
   ### FIND COLUMS WE NEED
   colname<-sprintf("Nterr.f\\[%s,",scen)
-  selcol<-grep(colname,dimnames(NeoIPM.ALL$samples[[1]])[[2]])
+  selcol<-grep(colname,dimnames(FOCMOD$samples[[1]])[[2]])
 
   allchainsamples <- data.frame()
   for(chain in 1:4) {
 
       ### EXTRACT AND SUMMARISE DATA
-      samplesout<-as.data.frame(NeoIPM.ALL$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
+      samplesout<-as.data.frame(FOCMOD$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
       allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
     }
 
