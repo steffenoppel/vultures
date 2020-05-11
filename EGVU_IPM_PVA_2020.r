@@ -418,7 +418,8 @@ for (l in 1:dim(z.terrvis)[1]){
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ### FOUR ARRAYS NEEDED - FOR OBSERVATIONS AND FOR EFFORT, FOR PARAMETER AND FOR INTERVAL
 ### EACH ARRAY HAS 3 dimensions for the number of sites (=territories), number of primary occasions and number of visits (=1 per MONTH)
-
+try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
+#try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
 
 # PREPARING THE REQUIRED INPUT DATA:
 R.terrvis<-length(unique(EGVUsum$terrnum))		# Number of individuals (= Territory-year combinations)
@@ -468,6 +469,199 @@ for(k in 1:K.terrvis){
 mean.eff.terrvis <- mean(obseff.terrvis, na.rm = TRUE)
 sd.eff.terrvis <- sd(obseff.terrvis[!is.na(obseff.terrvis)])
 obseff.terrvis <- (obseff.terrvis-mean.eff.terrvis)/sd.eff.terrvis     # Standardise observation effort
+
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE MATRIX OF RELEASE AND SURVIVAL SCENARIOS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+capt.release=seq(0,15,1)
+project.time=c(10,20,30)
+imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
+lag.time=c(5,10,15)
+PROJECTION.years<-seq(1,30,1)
+
+capt.rel.mat<- expand.grid(PROJECTION.years,capt.release,project.time) %>%
+  rename(Year=Var1,REL=Var2,DUR=Var3) %>%
+  mutate(scenario=paste(REL,DUR, sep="_")) %>%
+  mutate(REL=ifelse(Year>DUR,0,REL)) %>%
+  select(-DUR) %>%
+  spread(key=scenario, value=REL)
+
+
+surv.inc.mat<- expand.grid(PROJECTION.years,imp.surv,lag.time) %>%
+  rename(Year=Var1,SURV=Var2,LAG=Var3) %>%
+  mutate(scenario=paste(SURV,LAG, sep="_")) %>%
+  mutate(ann.offset=(SURV-1)/LAG) %>%
+  mutate(SURV=ifelse(Year<LAG,1+(Year*ann.offset),SURV)) %>%
+  select(-LAG,-ann.offset) %>%
+  spread(key=scenario, value=SURV)
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SET UP DATA AND INITIAL VALUES
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Bundle data across all of the data sources
+
+INPUT <- list(y.terrvis = y.terrvis,
+              nsite.terrvis = R.terrvis,
+              nrep.terrvis = J.terrvis,
+              nprim.terrvis = K.terrvis,
+              phase=c(1,1,1,1,1,1,1,2,2,2,2,2,2,2), ### starts in 2006, ends 2019 - phase switch after 2012
+              eff.terrvis=obseff.terrvis,
+              firstobs=first.obs,
+              f.obsvis=f.obsvis, 
+              
+              y.count=trendinput$N,
+              T.count=length(trendinput$N),		## year is standardized so that covariate values are not too far away from zero
+              
+              R.fec=breedinput$R,
+              J.fec=breedinput$J,
+              #J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
+              
+              y.telemetry = y.telemetry,
+              f.telemetry = f.telemetry,
+              l.telemetry = l.telemetry,
+              age.telemetry = age.mat, ### matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)), ##scaling age would be a pain for internal transformation
+              capt.telemetry = ifelse(birds$origin=="wild",0,1),
+              mig.telemetry = mig.mat,
+              nind.telemetry = dim(y.telemetry)[1],
+              n.occasions.telemetry = dim(y.telemetry)[2],
+              migprog.age = c(0,1,rep(0,34)), ## specifies when first migration occurs
+              captprog.age =c(0,0,0,0,0,0,0,0,0,0,1,rep(0,25)),
+              
+              ### Future Projection and SCENARIOS FOR TRAJECTORY
+              PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
+              scen.capt.release=ncol(capt.rel.mat)-1,
+              scen.imp.surv=ncol(surv.inc.mat)-1,
+              #capt.release=seq(0,15,1),
+              #imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
+              capt.release=capt.rel.mat[,2:ncol(capt.rel.mat)],
+              imp.surv=surv.inc.mat[,2:ncol(surv.inc.mat)])
+
+
+
+## Parameters to be estimated ('monitored') by JAGS
+paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.capt.rel.first.year",
+           "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
+           "mean.phi.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
+
+
+# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# # SPECIFY INITIAL VALUES
+# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ### provided by Adam Butler on 10 April 2018
+# 
+# ifix <- function(w){w[ w == -Inf] <- NA ; w }
+# ymax.terrvis <- ifix(apply(y.terrvis, c(1,3), max, na.rm=TRUE))
+# f1.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 1))}))
+# f2.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 2))}))
+# 
+# ## any(is.na(f1) & is.na(f2)) ## FALSE ## check - good !
+# 
+# z.obs.terrvis <- z.init.terrvis <- array(dim=dim(ymax.terrvis), data = NA)
+# nyr <- ncol(ymax.terrvis)
+# 
+# for(k in 1:nrow(ymax.terrvis)){
+#   
+#   ## ######################################
+#   ## Set observed values
+#   
+#   if(! is.na(f2.terrvis[k])){  
+#     z.obs.terrvis[k,1:(f2.terrvis[k])] <- 2
+#   }
+#   else{     
+#     z.obs.terrvis[k,1:(f1.terrvis[k])] <- 1
+#   }
+#   
+#   ## ######################################
+#   ## Set initial values for stochastic nodes
+#   
+#   test.a <- (! is.na(f2.terrvis[k])) & (f2.terrvis[k] < nyr) & ((is.na(f1.terrvis[k])) | (f1.terrvis[k] <= f2.terrvis[k]))
+#   if(test.a){
+#     z.init.terrvis[k,(f2.terrvis[k]+1):nyr] <- 0
+#   }
+#   
+#   ## ###########
+#   
+#   test.b <- (! is.na(f1.terrvis[k])) & (f1.terrvis[k] < nyr) & (is.na(f2.terrvis[k]) | (f1.terrvis[k] > f2.terrvis[k]))
+#   if(test.b){
+#     z.init.terrvis[k,(f1.terrvis[k]+1):nyr] <- 0
+#   }
+#   
+#   ## ###########
+#   
+#   test.c <- (! is.na(f2.terrvis[k])) & (! is.na(f1.terrvis[k])) & (f1.terrvis[k] > f2.terrvis[k])
+#   if(test.c){
+#     z.init.terrvis[k,(f2.terrvis[k]+1):f1.terrvis[k]] <- 1
+#   }
+#   
+#   ## ###########
+# }
+
+## ######################################################
+
+
+### CREATE INITIAL VALUES FOR MODEL
+INPUT$z.terrvis<-z.obs.terrvis
+initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
+                           mean.phi.terrvis=runif(2,0.75, 1),
+                           sigma.obs.count=runif(1,0,10),
+                           mu.fec = runif(1,0,1),
+                           z.telemetry = z.telemetry,
+                           mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
+                           base.obs.telemetry = rnorm(1,0, 0.001),                # Prior for intercept of observation probability on logit scale
+                           base.fail.telemetry = rnorm(1,0, 0.001),               # Prior for intercept of tag failure probability on logit scale
+                           base.recover.telemetry = rnorm(1,0, 0.001))}   
+
+
+# ### REDUCE WORKSPACE FOR RUNNING MODEL
+# rm.list<-data.frame(object=as.character(ls()), size=0)
+# for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
+# rm.list %>% arrange(size)
+# rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat","z.telemetry","z.obs.terrvis")))
+# gc()
+# save.image("EGVU_IPM_input_May2020.RData")
+
+
+# MCMC settings
+nc <- 3
+nt <- 4
+ni <- 5000
+nb <- 1000
+
+
+### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
+NeoIPM.ALL <- autojags(data=INPUT,
+                       inits=initIPM,
+                       parameters.to.save=paraIPM,
+                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v1.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                       n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
+
+## THIS MODEL ASSUMES THAT ALL WILD CHICKS ARE TAKEN INTO TEMPORARY CUSTODY
+NeoIPM.chickremoval <- autojags(data=INPUT,
+                       inits=initIPM,
+                       parameters.to.save=paraIPM,
+                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v1_chickremoval.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                       n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
+
+## THIS MODEL ASSUMES THAT ALL CAPTIVE-REARED CHICKS ARE TAKEN FROM THE WILD AND CALCULATES HOW MANY NEED TO BE BRED
+paraIPM<-c(paraIPM,"need.to.breed")
+NeoIPM.chicksupplement <- autojags(data=INPUT,
+                                inits=initIPM,
+                                parameters.to.save=paraIPM,
+                                model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v1_chicksupplementation.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                                n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
+
+
+
+EGVU_IPM_2020_v1_chicksupplementation.jags
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
 
 
 
@@ -845,187 +1039,6 @@ for (captageprog in 1:36){
 sink()
 
 
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# CREATE MATRIX OF RELEASE AND SURVIVAL SCENARIOS
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-capt.release=seq(0,15,1)
-project.time=c(10,20,30)
-imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
-lag.time=c(5,10,15)
-PROJECTION.years<-seq(1,30,1)
-
-capt.rel.mat<- expand.grid(PROJECTION.years,capt.release,project.time) %>%
-  rename(Year=Var1,REL=Var2,DUR=Var3) %>%
-  mutate(scenario=paste(REL,DUR, sep="_")) %>%
-  mutate(REL=ifelse(Year>DUR,0,REL)) %>%
-  select(-DUR) %>%
-  spread(key=scenario, value=REL)
-
-
-surv.inc.mat<- expand.grid(PROJECTION.years,imp.surv,lag.time) %>%
-  rename(Year=Var1,SURV=Var2,LAG=Var3) %>%
-  mutate(scenario=paste(SURV,LAG, sep="_")) %>%
-  mutate(ann.offset=(SURV-1)/LAG) %>%
-  mutate(SURV=ifelse(Year<LAG,1+(Year*ann.offset),SURV)) %>%
-  select(-LAG,-ann.offset) %>%
-  spread(key=scenario, value=SURV)
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SET UP DATA AND INITIAL VALUES
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## scale observation effort
-
-range(effort.terrvis)
-eff.scale<-scale(0:1993)
-
-## Bundle data across all of the data sources
-
-INPUT <- list(y.terrvis = y.terrvis,
-              nsite.terrvis = R.terrvis,
-              nrep.terrvis = J.terrvis,
-              nprim.terrvis = K.terrvis,
-              phase=c(1,1,1,1,1,1,1,1,1,1,2,2,2,2),
-              eff.terrvis=obseff.terrvis,
-              firstobs=first.obs,
-              f.obsvis=f.obsvis, 
-
-              y.count=trendinput$N,
-              T.count=length(trendinput$N),		## year is standardized so that covariate values are not too far away from zero
-
-              R.fec=breedinput$R,
-              J.fec=breedinput$J,
-              #J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
-
-              y.telemetry = y.telemetry,
-              f.telemetry = f.telemetry,
-              l.telemetry = l.telemetry,
-              age.telemetry = age.mat, ### matrix(agescale[age.mat], ncol=ncol(age.mat), nrow=nrow(age.mat)), ##scaling age would be a pain for internal transformation
-              capt.telemetry = ifelse(birds$origin=="wild",0,1),
-              mig.telemetry = mig.mat,
-              nind.telemetry = dim(y.telemetry)[1],
-              n.occasions.telemetry = dim(y.telemetry)[2],
-              migprog.age = c(0,1,rep(0,34)), ## specifies when first migration occurs
-              captprog.age =c(0,0,0,0,0,0,0,0,0,0,1,rep(0,25)),
-              
-              ### Future Projection and SCENARIOS FOR TRAJECTORY
-              PROJECTION=30,                ## used 10 and 50 years previously, now trying 30 years
-              scen.capt.release=ncol(capt.rel.mat)-1,
-              scen.imp.surv=ncol(surv.inc.mat)-1,
-              #capt.release=seq(0,15,1),
-              #imp.surv=c(1,1.02,1.04,1.06,1.08,1.10))
-              capt.release=capt.rel.mat[,2:ncol(capt.rel.mat)],
-              imp.surv=surv.inc.mat[,2:ncol(surv.inc.mat)])
-
-
-
-## Parameters to be estimated ('monitored') by JAGS
-paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.capt.rel.first.year",
-           "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
-            "mean.phi.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
-          
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SPECIFY INITIAL VALUES
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### provided by Adam Butler on 10 April 2018
-
-ifix <- function(w){w[ w == -Inf] <- NA ; w }
-ymax.terrvis <- ifix(apply(y.terrvis, c(1,3), max, na.rm=TRUE))
-f1.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 1))}))
-f2.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 2))}))
-
-## any(is.na(f1) & is.na(f2)) ## FALSE ## check - good !
-
-z.obs.terrvis <- z.init.terrvis <- array(dim=dim(ymax.terrvis), data = NA)
-nyr <- ncol(ymax.terrvis)
-
-for(k in 1:nrow(ymax.terrvis)){
-  
-  ## ######################################
-  ## Set observed values
-  
-  if(! is.na(f2.terrvis[k])){  
-    z.obs.terrvis[k,1:(f2.terrvis[k])] <- 2
-  }
-  else{     
-    z.obs.terrvis[k,1:(f1.terrvis[k])] <- 1
-  }
-  
-  ## ######################################
-  ## Set initial values for stochastic nodes
-  
-  test.a <- (! is.na(f2.terrvis[k])) & (f2.terrvis[k] < nyr) & ((is.na(f1.terrvis[k])) | (f1.terrvis[k] <= f2.terrvis[k]))
-  if(test.a){
-    z.init.terrvis[k,(f2.terrvis[k]+1):nyr] <- 0
-  }
-  
-  ## ###########
-  
-  test.b <- (! is.na(f1.terrvis[k])) & (f1.terrvis[k] < nyr) & (is.na(f2.terrvis[k]) | (f1.terrvis[k] > f2.terrvis[k]))
-  if(test.b){
-    z.init.terrvis[k,(f1.terrvis[k]+1):nyr] <- 0
-  }
-  
-  ## ###########
-  
-  test.c <- (! is.na(f2.terrvis[k])) & (! is.na(f1.terrvis[k])) & (f1.terrvis[k] > f2.terrvis[k])
-  if(test.c){
-    z.init.terrvis[k,(f2.terrvis[k]+1):f1.terrvis[k]] <- 1
-  }
-  
-  ## ###########
-}
-
-## ######################################################
-
-
-### MODEL WITH RANDOM EFFECTS
-INPUT$z.terrvis<-z.obs.terrvis
-initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
-                           mean.phi.terrvis=runif(2,0.75, 1),
-                         sigma.obs.count=runif(1,0,10),
-                         mu.fec = runif(1,0,1),
-                         z.telemetry = z.telemetry,
-                         mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
-                         base.obs.telemetry = rnorm(1,0, 0.001),                # Prior for intercept of observation probability on logit scale
-                         base.fail.telemetry = rnorm(1,0, 0.001),               # Prior for intercept of tag failure probability on logit scale
-                         base.recover.telemetry = rnorm(1,0, 0.001))}   
-
-
-# ### REDUCE WORKSPACE FOR RUNNING MODEL
-# rm.list<-data.frame(object=as.character(ls()), size=0)
-# for (obj in ls()) {rm.list$size[rm.list$object==obj]<-object.size(get(obj))}
-# rm.list %>% arrange(size)
-# rm(list=setdiff(ls(), c("INPUT","initIPM","paraIPM","z.init.terrvis","z.terrvis","yearindex.terrvis","cjs.init.z","capt.rel.mat","surv.inc.mat","z.telemetry","z.obs.terrvis")))
-# gc()
-# save.image("EGVU_IPM_input_May2020.RData")
-
-
-# MCMC settings
-nc <- 3
-nt <- 4
-ni <- 500
-nb <- 100
-
-
-### THIS MODEL QUANTIFIES FUTURE POPULATION TREND FOR A RANGE OF SCENARIOS OF CAPTIVE RELEASES AND SURVIVAL IMPROVEMENT
-NeoIPM.ALL <- autojags(data=INPUT,
-                   inits=initIPM,
-                   parameters.to.save=paraIPM,
-                   model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v1.jags",    ## was EGVU_IPM_2019_COMBINED.jags
-                   n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
-
-
-
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
-
-
-
-  
 
 
   
