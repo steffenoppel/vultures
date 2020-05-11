@@ -328,7 +328,7 @@ for (captageprog in 1:36){
             need.to.breed[ncr,is,fut] <- max(0,(capt.release[fut,ncr]-(fut.fec[fut,ncr] * 0.5 * Nterr.f[ncr,is,fut])))
             N1.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.juv.telemetry),1),round(nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors
             N2wild.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.sec.telemetry),1),round(N1.f[ncr,is,fut-1]))                ### number of 2-year old wild survivors
-            N2released.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.capt.rel.first.year),1),round(capt.release[fut,ncr]+nestlings.f[ncr,is,fut-1]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
+            N2released.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.capt.rel.first.year),1),round(capt.release[fut,ncr]))             ### +rescued[ncr,is,fut] number of 1-year old survivors 
             N2.f[ncr,is,fut] <-  N2wild.f[ncr,is,fut] + N2released.f[ncr,is,fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
             N3.f[ncr,is,fut] ~ dbin(min((imp.surv[fut,is]*ann.phi.third.telemetry),1),round(N2.f[ncr,is,fut-1]))                                                    ### number of 3-year old survivors
             N4.f[ncr,is,fut] ~ dbin(fut.survival[ncr,is,fut],round(N3.f[ncr,is,fut-1]))                                                       ### number of 4-year old survivors
