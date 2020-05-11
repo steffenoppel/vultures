@@ -118,7 +118,8 @@ TABLE1<-out %>% filter(parameter %in% c('mean.lambda','mean.phi.terrvis[1]','mea
 #TABLE1[6,]<-c("adult survival",quantile(ann.surv.terrvis,0.5),quantile(ann.surv.terrvis,0.025),quantile(ann.surv.terrvis,0.975))
 names(TABLE1)<-c("Parameter","Median","lowerCL","upperCL")
 TABLE1$Parameter<-c("fecundity","delayed release first year survival","wild first year survival","wild second year survival", "wild third year survival","adult survival (before 2012)","adult survival (after 2012)","population growth rate")
-fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates_IPM2020_v1.csv")
+TABLE1
+#fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates_IPM2020_v1.csv")
 
 
 
@@ -149,8 +150,8 @@ FUTLAM<-as.data.frame(fut.lambda) %>% gather(key="parm",value="f.lam") %>%
 
 FUTLAM
 fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios_IPM2020_v1.csv")
-
-
+fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios_IPM2020_v1_chickremoval.csv")
+fwrite(FUTLAM,"EGVU_fut_pop_growth_rate_all_scenarios_IPM2020_v1_chicksupplementation.csv")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -195,7 +196,7 @@ ggplot()+
   geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
 
   ## format axis ticks
-  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,125),breaks=seq(0,120,30), labels=as.character(seq(0,120,30)))+
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,1000),breaks=seq(0,1000,100))+
   scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
   
   ## ADD LINES FOR EXTINCTION
@@ -215,6 +216,7 @@ ggplot()+
         strip.background=element_rect(fill="white", colour="black"))
 
 ggsave("EGVU_population_projection_BASELINE_IPM2020_v1.jpg", width=9, height=6)
+ggsave("EGVU_population_projection_BASELINE_IPM2020_v1_chickremoval.jpg", width=9, height=6)
 
 
 
@@ -272,7 +274,7 @@ ggplot()+
         strip.background=element_rect(fill="white", colour="black"))
 
 ggsave("EGVU_population_projection_allScenarios_IPM2020_v1.jpg", width=16, height=13)
-
+ggsave("EGVU_population_projection_allScenarios_IPM2020_v1chicksupplementation.jpg", width=16, height=13)
 
 
 
@@ -315,6 +317,7 @@ FUTLAM %>% mutate(n.rel=as.numeric(n.rel)) %>%
         strip.background=element_rect(fill="white", colour="black"))
 
 ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1.jpg", width=10, height=8)
+ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chickremoval.jpg", width=10, height=8)
 
 
 
@@ -324,117 +327,125 @@ ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1.jpg", width=10, height=8
 
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# GRAPH 4: EXTINCTION PROBABILITY OVER TIME WITHOUT RESCUED CHICKS
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-### COMMENTED OUT ON 29 NOV 2019 - simply read in csv file
-
-rm(list=setdiff(ls(), c("FOCMOD","ncr.lu","surv.lu","trendinput")))
-
-
-### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
-extprop <- data.frame()
-
-for(scen in 1:nrow(ncr.lu)){
-
-  ### FIND COLUMS WE NEED
-  colname<-sprintf("Nterr.f\\[%s,",scen)
-  selcol<-grep(colname,dimnames(FOCMOD$samples[[1]])[[2]])
-
-  allchainsamples <- data.frame()
-  for(chain in 1:4) {
-
-      ### EXTRACT AND SUMMARISE DATA
-      samplesout<-as.data.frame(FOCMOD$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
-      allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
-    }
-
-  ### CALCULATE EXTINCTION PROBABILITY
-    allchainsamples<- allchainsamples %>%
-      mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
-      mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
-      mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
-
-      mutate(n=1, inc=ifelse(value<10,1,0)) %>%
-      group_by(capt.index,surv.index,Year) %>%
-      summarise(ext.prob=sum(inc)/sum(n))
-
-    extprop <- rbind(extprop,as.data.frame(allchainsamples))
-    print(scen)
-}
-
-head(samplesout)
-head(extprop)
-dim(extprop)
-
-fwrite(extprop,"EGVU_ext_prob_all_scenarios_IPM2020_v1.csv")
-extprop<-fread("EGVU_ext_prob_all_scenarios_IPM2020_v1.csv")
-
-
-
-## create factors for plot labels and order them appropriately
-
-extprop<- extprop %>%
-  left_join(ncr.lu, by="capt.index") %>%
-  left_join(surv.lu, by="surv.index") %>%
-  filter(lag.time==10) %>%
-  mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
-  mutate(surv.inc.ord=factor(surv.inc, levels = c("none","+ 2 %","+ 4 %","+ 6 %","+ 8 %","+ 10 %"))) %>%
-  mutate(n.rel.ord=factor(n.rel, levels = c("0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"))) %>%
-  #mutate(lag.time=sprintf("after %s years",lag.time)) %>%
-  mutate(n.years=sprintf("for %s years",n.years)) %>%
-  arrange(n.rel,Year) %>%
-  mutate(release=paste(n.rel,n.years," ")) 
-#extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
-#extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
-  
-dim(extprop)
+ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chicksupplementation.jpg", width=10, height=8)
 
 
 
 
 
 
-### produce plot with 4 panels and multiple lines per year
-
-## CREATE A COLOUR PALETTE FOR THE NUMBER OF CHICKS RELEASED
-colfunc <- colorRampPalette(c("cornflowerblue", "firebrick"))
-
-
-ggplot(data=extprop)+
-  geom_line(aes(x=Year, y=ext.prob, color=n.rel.ord), size=1)+
-  facet_grid(n.years~surv.inc.ord) +
-  
-  ## format axis ticks
-  scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
-  scale_x_continuous(name="Year", breaks=seq(2020,2050,5), labels=as.character(seq(2020,2050,5)))+
-  guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
-  scale_colour_manual(palette=colfunc)+
-  
-  ## beautification of the axes
-  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y=element_text(size=14, color="black"),
-        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
-        axis.title=element_text(size=18),
-        legend.text=element_text(size=12, color="black"),
-        legend.title=element_text(size=14, color="black"),
-        legend.key = element_rect(fill = NA),
-        strip.text.x=element_text(size=14, color="black"),
-        strip.text.y=element_text(size=14, color="black"), 
-        strip.background=element_rect(fill="white", colour="black"))
-  
-ggsave("EGVU_extinction_probability_allScenarios_IPM2020_v1.jpg", width=9, height=6)
-
-
-
-### CREATE TABLE 2 FOR MANUSCRIPT ###
-## added 18 Feb 2020
-head(extprop)
-TABLE2<- extprop %>%
-  filter(surv.inc.ord=="none") %>%
-  filter(Year==2049) %>%
-  select(ext.prob,n.rel.ord,n.years) %>%
-  spread(key=n.years,value=ext.prob)
-fwrite(TABLE2,"TABLE2.csv")
+# 
+# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# # GRAPH 4: EXTINCTION PROBABILITY OVER TIME WITHOUT RESCUED CHICKS
+# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ## THIS GRAPH NO LONGER MAKES SENSE AS OF 2020_v1 because no population goes extinct
+# 
+# ### COMMENTED OUT ON 29 NOV 2019 - simply read in csv file
+# 
+# rm(list=setdiff(ls(), c("FOCMOD","ncr.lu","surv.lu","trendinput")))
+# 
+# 
+# ### CANNOT PROCESS ALL DATA AT ONCE, BECAUSE MEMORY OVERFLOW. NEED TO LOOP OVER EACH SCENARIO
+# extprop <- data.frame()
+# 
+# for(scen in 1:nrow(ncr.lu)){
+# 
+#   ### FIND COLUMS WE NEED
+#   colname<-sprintf("Nterr.f\\[%s,",scen)
+#   selcol<-grep(colname,dimnames(FOCMOD$samples[[1]])[[2]])
+# 
+#   allchainsamples <- data.frame()
+#   for(chain in 1:4) {
+# 
+#       ### EXTRACT AND SUMMARISE DATA
+#       samplesout<-as.data.frame(FOCMOD$samples[[1]][,selcol]) %>% gather(key="parm", value="value")
+#       allchainsamples <- rbind(allchainsamples,as.data.frame(samplesout))
+#     }
+# 
+#   ### CALCULATE EXTINCTION PROBABILITY
+#     allchainsamples<- allchainsamples %>%
+#       mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+#       mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
+#       mutate(Year=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,3])+(max(trendinput$year))) %>%
+# 
+#       mutate(n=1, inc=ifelse(value<10,1,0)) %>%
+#       group_by(capt.index,surv.index,Year) %>%
+#       summarise(ext.prob=sum(inc)/sum(n))
+# 
+#     extprop <- rbind(extprop,as.data.frame(allchainsamples))
+#     print(scen)
+# }
+# 
+# head(samplesout)
+# head(extprop)
+# dim(extprop)
+# 
+# fwrite(extprop,"EGVU_ext_prob_all_scenarios_IPM2020_v1.csv")
+# extprop<-fread("EGVU_ext_prob_all_scenarios_IPM2020_v1.csv")
+# 
+# 
+# 
+# ## create factors for plot labels and order them appropriately
+# 
+# extprop<- extprop %>%
+#   left_join(ncr.lu, by="capt.index") %>%
+#   left_join(surv.lu, by="surv.index") %>%
+#   filter(lag.time==10) %>%
+#   mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+#   mutate(surv.inc.ord=factor(surv.inc, levels = c("none","+ 2 %","+ 4 %","+ 6 %","+ 8 %","+ 10 %"))) %>%
+#   mutate(n.rel.ord=factor(n.rel, levels = c("0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"))) %>%
+#   #mutate(lag.time=sprintf("after %s years",lag.time)) %>%
+#   mutate(n.years=sprintf("for %s years",n.years)) %>%
+#   arrange(n.rel,Year) %>%
+#   mutate(release=paste(n.rel,n.years," ")) 
+# #extprop$capt.release <- factor(extprop$capt.release, labels = c("no captive releases","+ 2 chicks/year","+ 4 chicks/year","+ 6 chicks/year"))
+# #extprop$imp.surv <- factor(extprop$imp.surv, labels = c("no improvement","surv +2%", "surv +4%", "surv +6%"))
+#   
+# dim(extprop)
+# 
+# 
+# 
+# 
+# 
+# 
+# ### produce plot with 4 panels and multiple lines per year
+# 
+# ## CREATE A COLOUR PALETTE FOR THE NUMBER OF CHICKS RELEASED
+# colfunc <- colorRampPalette(c("cornflowerblue", "firebrick"))
+# 
+# 
+# ggplot(data=extprop)+
+#   geom_line(aes(x=Year, y=ext.prob, color=n.rel.ord), size=1)+
+#   facet_grid(n.years~surv.inc.ord) +
+#   
+#   ## format axis ticks
+#   scale_y_continuous(name="Probability of extinction (%)", limits=c(0,1),breaks=seq(0,1,0.2), labels=as.character(seq(0,100,20)))+
+#   scale_x_continuous(name="Year", breaks=seq(2020,2050,5), labels=as.character(seq(2020,2050,5)))+
+#   guides(color=guide_legend(title="N captive releases"),fill=guide_legend(title="N captive releases"))+
+#   scale_colour_manual(palette=colfunc)+
+#   
+#   ## beautification of the axes
+#   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+#         axis.text.y=element_text(size=14, color="black"),
+#         axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+#         axis.title=element_text(size=18),
+#         legend.text=element_text(size=12, color="black"),
+#         legend.title=element_text(size=14, color="black"),
+#         legend.key = element_rect(fill = NA),
+#         strip.text.x=element_text(size=14, color="black"),
+#         strip.text.y=element_text(size=14, color="black"), 
+#         strip.background=element_rect(fill="white", colour="black"))
+#   
+# ggsave("EGVU_extinction_probability_allScenarios_IPM2020_v1.jpg", width=9, height=6)
+# 
+# 
+# 
+# ### CREATE TABLE 2 FOR MANUSCRIPT ###
+# ## added 18 Feb 2020
+# head(extprop)
+# TABLE2<- extprop %>%
+#   filter(surv.inc.ord=="none") %>%
+#   filter(Year==2049) %>%
+#   select(ext.prob,n.rel.ord,n.years) %>%
+#   spread(key=n.years,value=ext.prob)
+# fwrite(TABLE2,"TABLE2.csv")
