@@ -552,57 +552,57 @@ paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.cap
            "mean.phi.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
 
 
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# # SPECIFY INITIAL VALUES
-# #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# ### provided by Adam Butler on 10 April 2018
-# 
-# ifix <- function(w){w[ w == -Inf] <- NA ; w }
-# ymax.terrvis <- ifix(apply(y.terrvis, c(1,3), max, na.rm=TRUE))
-# f1.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 1))}))
-# f2.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 2))}))
-# 
-# ## any(is.na(f1) & is.na(f2)) ## FALSE ## check - good !
-# 
-# z.obs.terrvis <- z.init.terrvis <- array(dim=dim(ymax.terrvis), data = NA)
-# nyr <- ncol(ymax.terrvis)
-# 
-# for(k in 1:nrow(ymax.terrvis)){
-#   
-#   ## ######################################
-#   ## Set observed values
-#   
-#   if(! is.na(f2.terrvis[k])){  
-#     z.obs.terrvis[k,1:(f2.terrvis[k])] <- 2
-#   }
-#   else{     
-#     z.obs.terrvis[k,1:(f1.terrvis[k])] <- 1
-#   }
-#   
-#   ## ######################################
-#   ## Set initial values for stochastic nodes
-#   
-#   test.a <- (! is.na(f2.terrvis[k])) & (f2.terrvis[k] < nyr) & ((is.na(f1.terrvis[k])) | (f1.terrvis[k] <= f2.terrvis[k]))
-#   if(test.a){
-#     z.init.terrvis[k,(f2.terrvis[k]+1):nyr] <- 0
-#   }
-#   
-#   ## ###########
-#   
-#   test.b <- (! is.na(f1.terrvis[k])) & (f1.terrvis[k] < nyr) & (is.na(f2.terrvis[k]) | (f1.terrvis[k] > f2.terrvis[k]))
-#   if(test.b){
-#     z.init.terrvis[k,(f1.terrvis[k]+1):nyr] <- 0
-#   }
-#   
-#   ## ###########
-#   
-#   test.c <- (! is.na(f2.terrvis[k])) & (! is.na(f1.terrvis[k])) & (f1.terrvis[k] > f2.terrvis[k])
-#   if(test.c){
-#     z.init.terrvis[k,(f2.terrvis[k]+1):f1.terrvis[k]] <- 1
-#   }
-#   
-#   ## ###########
-# }
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SPECIFY INITIAL VALUES
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### provided by Adam Butler on 10 April 2018
+
+ifix <- function(w){w[ w == -Inf] <- NA ; w }
+ymax.terrvis <- ifix(apply(y.terrvis, c(1,3), max, na.rm=TRUE))
+f1.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 1))}))
+f2.terrvis <- ifix(apply(ymax.terrvis, 1, function(z.terrvis){max(which(z.terrvis == 2))}))
+
+## any(is.na(f1) & is.na(f2)) ## FALSE ## check - good !
+
+z.obs.terrvis <- z.init.terrvis <- array(dim=dim(ymax.terrvis), data = NA)
+nyr <- ncol(ymax.terrvis)
+
+for(k in 1:nrow(ymax.terrvis)){
+
+  ## ######################################
+  ## Set observed values
+
+  if(! is.na(f2.terrvis[k])){
+    z.obs.terrvis[k,1:(f2.terrvis[k])] <- 2
+  }
+  else{
+    z.obs.terrvis[k,1:(f1.terrvis[k])] <- 1
+  }
+
+  ## ######################################
+  ## Set initial values for stochastic nodes
+
+  test.a <- (! is.na(f2.terrvis[k])) & (f2.terrvis[k] < nyr) & ((is.na(f1.terrvis[k])) | (f1.terrvis[k] <= f2.terrvis[k]))
+  if(test.a){
+    z.init.terrvis[k,(f2.terrvis[k]+1):nyr] <- 0
+  }
+
+  ## ###########
+
+  test.b <- (! is.na(f1.terrvis[k])) & (f1.terrvis[k] < nyr) & (is.na(f2.terrvis[k]) | (f1.terrvis[k] > f2.terrvis[k]))
+  if(test.b){
+    z.init.terrvis[k,(f1.terrvis[k]+1):nyr] <- 0
+  }
+
+  ## ###########
+
+  test.c <- (! is.na(f2.terrvis[k])) & (! is.na(f1.terrvis[k])) & (f1.terrvis[k] > f2.terrvis[k])
+  if(test.c){
+    z.init.terrvis[k,(f2.terrvis[k]+1):f1.terrvis[k]] <- 1
+  }
+
+  ## ###########
+}
 
 ## ######################################################
 
@@ -659,8 +659,6 @@ NeoIPM.chicksupplement <- autojags(data=INPUT,
                                 n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
 
 
-
-EGVU_IPM_2020_v1_chicksupplementation.jags
 save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
 
 
