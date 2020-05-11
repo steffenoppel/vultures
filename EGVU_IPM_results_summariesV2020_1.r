@@ -196,16 +196,17 @@ ggplot()+
   geom_point(data=trendinput, aes(x=year+0.1, y=N), size=1,col='darkblue')+
 
   ## format axis ticks
-  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,1000),breaks=seq(0,1000,100))+
+  #scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,1000),breaks=seq(0,1000,100))+
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,125),breaks=seq(0,120,30))+
   scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
   
   ## ADD LINES FOR EXTINCTION
-  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
-  geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
+  #geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
+  #geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
   
   ## ADD LABELS FOR EXTINCTION
-  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
-  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
+  #geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
+  #geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
   
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -318,20 +319,37 @@ FUTLAM %>% mutate(n.rel=as.numeric(n.rel)) %>%
 
 ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1.jpg", width=10, height=8)
 ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chickremoval.jpg", width=10, height=8)
-
-
-
-
-
-
-
-
-
 ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chicksupplementation.jpg", width=10, height=8)
 
 
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SUMMARISE NUMBER OF CHICKS THAT WILL BE NEEDED
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## UNNECESSARY AS WILD PRODUCTIVITY ALWAYS GREATER THAN WHAT IS NEEDED IN CAPTIVITY
 
+
+## retrieve the future chicks needed
+selcol<-grep("need.to.breed",dimnames(FOCMOD$samples[[1]])[[2]])
+need.to.breed<-FOCMOD$samples[[1]][,selcol]
+for (c in 2:nc){
+  need.to.breed<-rbind(need.to.breed,FOCMOD$samples[[c]][,selcol])
+}
+
+hist(NEEDED$need.to.breed)
+
+NEEDED<-as.data.frame(need.to.breed) %>% gather(key="parm",value="need.to.breed") %>%
+  mutate(Year=rep(seq(max(trendinput$year)+1,(max(trendinput$year)+INPUT$PROJECTION),1),each=dim(ncr.lu)[1]*dim(surv.lu)[1])) %>%
+  group_by(parm) %>%
+  summarise(median=quantile(need.to.breed,0.5),lcl=quantile(need.to.breed,0.025),ucl=quantile(need.to.breed,0.975)) %>%
+  mutate(capt.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+  mutate(surv.index=as.numeric(str_extract_all(parm,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%
+
+  left_join(ncr.lu, by="capt.index") %>%
+  left_join(surv.lu, by="surv.index") %>%
+  mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+  #select(n.rel,n.years,surv.inc,lag.time,median,lcl,ucl) %>%
+  arrange(median)
 
 
 # 
