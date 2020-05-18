@@ -49,6 +49,10 @@
 ## juvenile survival adapted from Buechley et al. 2020 telemetry survival model
 ## REMOVED EGG HARVEST SECTION
 
+### 18 May 2020: huge discussion whether to use only core area from Rhodopes or not
+## NEED TO SEND INPUT DATA TO FILL GAPS
+## NEED TO REMOVE PHASE SWITCH IN SURVIVAL
+
 library(readxl)
 library(jagsUI)
 library(tidyverse)
@@ -308,7 +312,7 @@ EGVU<- EGVU %>%
   filter(!is.na(n_adults)) %>%
   filter(visit_duration!=0) %>%
   mutate(n_adults=ifelse(n_adults>2,2,n_adults)) %>%
-  select(territory_name,date,visit_duration,n_adults) %>%
+  select(Country,territory_name,date,visit_duration,n_adults) %>%
   mutate(Year=year(date),JDAY=yday(date),MONTH=month(date)) %>%
   mutate(PRIMOCC=paste(Year,MONTH, sep="_")) %>%     ## CREATE UNIQUE PRIMARY OCCASION (MONTH WITHIN YEARS)
   filter(Year < 2020) %>%
@@ -333,7 +337,7 @@ head(EGVU)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 EGVUsum <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
-  group_by(territory_name,Year,MONTH,PRIMOCC) %>%
+  group_by(Country,territory_name,Year,MONTH,PRIMOCC) %>%
   summarise(N=max(n_adults, na.rm=T),effort=sum(visit_duration, na.rm=T)) %>%
   ungroup() %>%
   mutate(yearnum=as.numeric(Year)-2005) %>%
@@ -341,8 +345,6 @@ EGVUsum <- EGVU %>% filter (MONTH %in% c(4,5,6,7,8)) %>%
   arrange(territory_name)
 
 head(EGVUsum)
-
-
 
 # Function to create a matrix of initial values for latent state z
 cjs.init.z <- function(ch,f){
@@ -363,6 +365,13 @@ enc.terrvis <- EGVUsum %>%
   group_by(terrnum, Year) %>%
   summarise(occ=max(N,na.rm=T)) %>%
   spread(key=Year, value=occ, fill = 0) %>%
+  arrange(terrnum)
+
+param.terrvis <- EGVUsum %>%
+  mutate(param=ifelse(Year<2013,1,ifelse(Country=="Greece",1,2))) %>%
+  group_by(terrnum, Year) %>%
+  summarise(par=mean(param,na.rm=T)) %>%
+  spread(key=Year, value=par, fill = 1) %>%
   arrange(terrnum)
 
 obs.terrvis <- EGVUsum %>%
@@ -481,7 +490,7 @@ capt.release=seq(0,15,1)
 project.time=c(10,20,30)
 imp.surv=c(1,1.02,1.04,1.06,1.08,1.10)
 lag.time=c(5,10,15)
-PROJECTION.years<-seq(1,30,1)
+PROJECTION.years<-seq(1,50,1)
 
 capt.rel.mat<- expand.grid(PROJECTION.years,capt.release,project.time) %>%
   rename(Year=Var1,REL=Var2,DUR=Var3) %>%
@@ -512,7 +521,8 @@ INPUT <- list(y.terrvis = y.terrvis,
               nsite.terrvis = R.terrvis,
               nrep.terrvis = J.terrvis,
               nprim.terrvis = K.terrvis,
-              phase=c(1,1,1,1,1,1,1,2,2,2,2,2,2,2), ### starts in 2006, ends 2019 - phase switch after 2012
+              phase=c(2,2,2,2,2,2,2,2,2,2,2,2,2,2), ### starts in 2006, ends 2019 - phase switch after 2012
+              #phase=as.matrix(param.terrvis[,2:dim(param.terrvis)[2]]), ### allow phase to vary between GR and BG - this is horribly complicated and I abandoned it immediately
               eff.terrvis=obseff.terrvis,
               firstobs=first.obs,
               f.obsvis=f.obsvis, 
@@ -659,7 +669,7 @@ NeoIPM.chicksupplement <- autojags(data=INPUT,
                                 n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
 
 
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1_50y.RData")
 
 
 
