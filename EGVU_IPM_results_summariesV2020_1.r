@@ -52,6 +52,7 @@ select<-dplyr::select
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures"), silent=T)
 #load("EGVU_IPM_output2019_v4.RData")
 load("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1.RData")
+load("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1_50y.RData")
 
 
 #### SELECT MODEL ###
@@ -198,15 +199,15 @@ ggplot()+
   ## format axis ticks
   #scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,1000),breaks=seq(0,1000,100))+
   scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,125),breaks=seq(0,120,30))+
-  scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
+  scale_x_continuous(name="Year", breaks=seq(2005,2070,5), labels=as.character(seq(2005,2070,5)))+
   
   ## ADD LINES FOR EXTINCTION
-  #geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
-  #geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$lcl<10))],linetype='dashed', size=1,colour="firebrick")+
+  geom_vline(xintercept=EV.base$Year[min(which(EV.base$median<10))],linetype='dashed', size=1,colour="firebrick")+
   
   ## ADD LABELS FOR EXTINCTION
-  #geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
-  #geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$lcl<10))]-1),label=paste("5% probability \n in ",EV.base$Year[min(which(EV.base$lcl<10))]), size=5, colour="firebrick", hjust=1)+
+  geom_text(aes(y=125,x=EV.base$Year[min(which(EV.base$median<10))]-1),label=paste("50% probability \n in ",xintercept=EV.base$Year[min(which(EV.base$median<10))]), size=5, colour="firebrick", hjust=1)+
   
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
