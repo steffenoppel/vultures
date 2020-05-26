@@ -99,13 +99,13 @@
     # Priors for population process and immigration
     
     # Initial population sizes for first year of monitoring
-    nestlings[1] ~ dunif(50, 70)   ##changed from JUV
-    N1[1] ~ dunif(15, 35)
-    N2[1] ~ dunif(10, 32)
-    N3[1] ~ dunif(5, 20)
-    N4[1] ~ dunif(5, 17)
-    N5[1] ~ dunif(5, 15)
-    N6[1] ~ dunif(100, 140)
+    nestlings[1] ~ dunif(70, 120)   ##changed from JUV
+    N1[1] ~ dunif(35, 75)
+    N2[1] ~ dunif(15, 40)
+    N3[1] ~ dunif(5, 35)
+    N4[1] ~ dunif(5, 30)
+    N5[1] ~ dunif(5, 25)
+    N6[1] ~ dunif(160, 205)
     
     
     #-------------------------------------------------  

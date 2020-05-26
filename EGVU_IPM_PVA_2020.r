@@ -79,14 +79,16 @@ trendinput<- occu %>% filter(year>2005) %>%
   group_by(year) %>%
   summarise(N=sum(occupancy), R=sum(breeding, na.rm=T), J=sum(fledglings, na.rm=T))
 
-countrytrendinput<- occu %>% filter(year>2005) %>%
-  filter(!(Country %in% c("Niger"))) %>%    # introduced in 2020 to remove Niger data
-  group_by(year,Country) %>%
-  summarise(N=sum(occupancy)) %>%
-  spread(key=Country, value=N)
+# countrytrendinput<- occu %>% filter(year>2005) %>%
+#   filter(!(Country %in% c("Niger"))) %>%    # introduced in 2020 to remove Niger data
+#   group_by(year,Country) %>%
+#   summarise(N=sum(occupancy)) %>%
+#   spread(key=Country, value=N)
+
+countrytrendinput<- fread("EVGU_countrytrendinput2019.csv")
 
 ## calculate mean proportion of each country to total count
-country.props<-colMeans(prop.table(as.matrix(countrytrendinput[-1]), margin = 1), na.rm=T)
+country.props<-colMeans(prop.table(as.matrix(countrytrendinput[,-1]), margin = 1), na.rm=T)
 
 
 breedinput<- breed %>% filter(Year>2005) %>%
@@ -681,7 +683,6 @@ NeoIPM.chicksupplement <- autojags(data=INPUT,
                                 n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni, 
 
 
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v1_50y.RData")
 
 
 
@@ -709,6 +710,7 @@ NeoIPM.ALL <- autojags(data=INPUT,
                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
 
 
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v2_30y.RData")
 
 
 
@@ -1194,13 +1196,13 @@ cat("
     # Priors for population process and immigration
     
     # Initial population sizes for first year of monitoring
-    nestlings[1] ~ dunif(50, 70)   ##changed from JUV
-    N1[1] ~ dunif(15, 35)
-    N2[1] ~ dunif(10, 32)
-    N3[1] ~ dunif(5, 20)
-    N4[1] ~ dunif(5, 17)
-    N5[1] ~ dunif(5, 15)
-    N6[1] ~ dunif(100, 140)
+    nestlings[1] ~ dunif(70, 120)   ##changed from JUV
+    N1[1] ~ dunif(35, 75)
+    N2[1] ~ dunif(15, 40)
+    N3[1] ~ dunif(5, 35)
+    N4[1] ~ dunif(5, 30)
+    N5[1] ~ dunif(5, 25)
+    N6[1] ~ dunif(160, 205)
     
     
     #-------------------------------------------------  
