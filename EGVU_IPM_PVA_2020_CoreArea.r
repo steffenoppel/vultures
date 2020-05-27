@@ -646,6 +646,158 @@ NeoIPM.CORE <- autojags(data=INPUT,
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SUMMARISE OUTPUT IN GRAPHS AND TABLES 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+FOCMOD<-NeoIPM.CORE
+
+### create data frame of model output
+out<-as.data.frame(FOCMOD$summary)  ## changed from NeoIPMbasic
+out$parameter<-row.names(FOCMOD$summary) ## changed from NeoIPMbasic
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# LOOK UP SCENARIOS FROM MATRIX OF RELEASE AND SURVIVAL SCENARIOS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## MELT MATRICES TO RECREATE SCENARIOS FROM INDEX NUMBERS
+ncr.lu<-capt.rel.mat %>% gather(key=Scenario, value=n.released,-Year) %>%
+  filter(Year==1) %>%
+  separate(Scenario,sep="_",into=c("n.rel","n.years")) %>%
+  mutate(capt.index=seq_along(Year)) %>%
+  select(capt.index,n.rel,n.years)
+
+surv.lu<-surv.inc.mat %>% gather(key=Scenario, value=n.released,-Year) %>%
+  filter(Year==30) %>%
+  separate(Scenario,sep="_",into=c("surv.inc","lag.time")) %>%
+  mutate(surv.index=seq_along(Year)) %>%
+  select(surv.index,surv.inc,lag.time)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CREATE OUTPUT TABLE FOR REPORT /MANUSCRIPT
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel"), silent=T)
+head(out)
+
+TABLE1<-out %>% filter(parameter %in% c('mean.lambda','mean.phi.terrvis','ann.phi.juv.telemetry',"ann.phi.capt.rel.first.year",'ann.phi.sec.telemetry','ann.phi.third.telemetry','mu.fec')) %>%
+  select(parameter,c(5,3,7))
+names(TABLE1)<-c("Parameter","Median","lowerCL","upperCL")
+TABLE1$Parameter<-c("fecundity","delayed release first year survival","wild first year survival","wild second year survival", "wild third year survival","adult survival","population growth rate")
+TABLE1
+fwrite(TABLE1,"EGVU_IPM_demographic_parameter_estimates_CoreArea.csv")
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GRAPH 1: POPULATION TRAJECTORY UNDER THE NO MANAGEMENT SCENARIO
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## retrieve the past population estimates (2006-2019)
+EV.past<-out[(grep("Nterr\\[",out$parameter)),c(12,5,3,7)] %>%
+  mutate(Year=trendinput$year)
+names(EV.past)[1:4]<-c('parm','median','lcl','ucl')
+
+## retrieve the population projections and insert proper scenario labels
+EV.fut<-out[(grep("Nterr.f",out$parameter)),c(12,5,3,7)] %>%
+  mutate(Year=rep(seq(max(trendinput$year)+1,(max(trendinput$year)+INPUT$PROJECTION),1),each=dim(ncr.lu)[1]*dim(surv.lu)[1])) %>%
+  mutate(capt.index=as.numeric(str_extract_all(parameter,"\\(?[0-9]+\\)?", simplify=TRUE)[,1])) %>%
+  mutate(surv.index=as.numeric(str_extract_all(parameter,"\\(?[0-9]+\\)?", simplify=TRUE)[,2])) %>%  
+  left_join(ncr.lu, by="capt.index") %>%
+  left_join(surv.lu, by="surv.index") %>%
+  rename(parm=parameter,median=`50%`,lcl=`2.5%`,ucl=`97.5%`) %>%
+  dplyr::select(parm,n.rel,n.years,surv.inc,lag.time,Year,median,lcl,ucl)
+
+### SUMMARISE FOR BASELINE TRAJECTORY
+EV.base <- EV.fut %>% filter(n.rel==0 & surv.inc<1.0001 & n.years==10 & lag.time==10) %>%
+  select(parm, median, lcl, ucl, Year) %>%
+  bind_rows(EV.past) %>%
+  arrange(Year)
+
+
+
+### CREATE PLOT FOR BASELINE TRAJECTORY
+
+ggplot()+
+  geom_line(data=EV.base, aes(x=Year, y=median), color="cornflowerblue",size=1)+
+  geom_ribbon(data=EV.base,aes(x=Year, ymin=lcl,ymax=ucl),alpha=0.2)+
+  geom_point(data=trendinput, aes(x=year+0.1, y=N), size=2,col='darkblue')+
+  
+  ## format axis ticks
+  #scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,1000),breaks=seq(0,1000,100))+
+  scale_y_continuous(name="N territorial Egyptian Vultures in Eastern Rhodopes", limits=c(0,80),breaks=seq(0,80,10))+
+  scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=18, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18), 
+        strip.text.x=element_text(size=18, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+ggsave("EGVU_population_projection_CoreArea.jpg", width=9, height=6)
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GRAPH 2: PLOT POPULATION TREND FOR DIFFERENT SCENARIOS OF IMPROVEMENT AND CAPT RELEASE
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+head(EV.fut)
+
+## CREATE A COLOUR PALETTE FOR THE NUMBER OF CHICKS RELEASED
+colfunc <- colorRampPalette(c("cornflowerblue", "firebrick"))
+
+
+## SELECT ONLY 10 YEAR SURVIVAL LAG
+## modify factors for printing
+
+EV.fut %>%
+  filter(lag.time==10) %>%
+  mutate(surv.inc=ifelse(as.numeric(surv.inc)>1,paste("+",as.integer((as.numeric(surv.inc)-1)*100),"%"),"none")) %>%
+  mutate(surv.inc.ord=factor(surv.inc, levels = c("none","+ 2 %","+ 4 %","+ 6 %","+ 8 %","+ 10 %"))) %>%
+  mutate(n.rel.ord=factor(n.rel, levels = c("0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"))) %>%
+  #mutate(lag.time=sprintf("after %s years",lag.time)) %>%
+  mutate(n.years=sprintf("for %s years",n.years)) %>%
+  arrange(n.rel,Year) %>%
+  #mutate(release=paste(n.rel,n.years," ")) %>% 
+  #mutate(n.years=as.factor(n.years)) %>%
+  
+  
+  
+  ### produce plot with 18 panels and multiple lines per year
+  
+  ggplot()+
+  geom_line(aes(x=Year, y=median, color=n.rel.ord),size=1)+
+  #geom_ribbon(data=EV.fut,aes(x=Year, ymin=lcl,ymax=ucl, fill=capt.release),alpha=0.2)+
+  #geom_line(data=trendinput, aes(x=year, y=N), size=1,col='cornflowerblue')+
+  facet_grid(n.years~surv.inc.ord) +
+  
+  ## format axis ticks
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,200),breaks=seq(0,200,50), labels=as.character(seq(0,200,50)))+
+  scale_x_continuous(name="Year", breaks=seq(2020,2050,5), labels=as.character(seq(2020,2050,5)))+
+  guides(color=guide_legend(title="N chicks \n released"))+
+  scale_colour_manual(palette=colfunc)+
+  
+  ## beautification of the axes
+  theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y=element_text(size=14, color="black"),
+        axis.text.x=element_text(size=12, color="black",angle=45, vjust = 1, hjust=1), 
+        axis.title=element_text(size=18),
+        legend.text=element_text(size=12, color="black"),
+        legend.title=element_text(size=14, color="black"),
+        legend.key = element_rect(fill = NA),
+        strip.text.x=element_text(size=14, color="black"),
+        strip.text.y=element_text(size=14, color="black"), 
+        strip.background=element_rect(fill="white", colour="black"))
+
+
+
+
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SPECIFY INTEGRATED POPULATION MODEL FOR BALKAN EGYPTIAN VULTURES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
