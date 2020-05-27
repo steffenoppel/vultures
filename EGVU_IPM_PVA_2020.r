@@ -49,9 +49,8 @@
 ## juvenile survival adapted from Buechley et al. 2020 telemetry survival model
 ## REMOVED EGG HARVEST SECTION
 
-### 18 May 2020: huge discussion whether to use only core area from Rhodopes or not
-## NEED TO SEND INPUT DATA TO FILL GAPS
-## NEED TO REMOVE PHASE SWITCH IN SURVIVAL
+### 18 May 2020: huge discussion whether to use only core area from Rhodopes or not -> outsourced into new script
+### 27 May 2020: included Albania and N Macedonia and adjusted model to have single constant adult survival
 
 library(readxl)
 library(jagsUI)
@@ -1197,12 +1196,12 @@ cat("
     
     # Initial population sizes for first year of monitoring
     nestlings[1] ~ dunif(70, 120)   ##changed from JUV
-    N1[1] ~ dunif(35, 75)
-    N2[1] ~ dunif(15, 40)
-    N3[1] ~ dunif(5, 35)
-    N4[1] ~ dunif(5, 30)
-    N5[1] ~ dunif(5, 25)
-    N6[1] ~ dunif(160, 205)
+    N1[1] ~ dunif(15, 45)
+    N2[1] ~ dunif(5, 20)
+    N3[1] ~ dunif(5, 15)
+    N4[1] ~ dunif(4, 14)
+    N5[1] ~ dunif(3, 13)
+    N6[1] ~ dunif(190, 220)
     
     
     #-------------------------------------------------  
