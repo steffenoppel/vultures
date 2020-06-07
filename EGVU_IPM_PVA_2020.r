@@ -61,6 +61,7 @@ library(tidyverse)
 library(ggplot2)
 library(data.table)
 library(lubridate)
+library(janitor)
 filter<-dplyr::filter
 select<-dplyr::select
 
@@ -69,7 +70,7 @@ select<-dplyr::select
 # LOAD AND MANIPULATE POPULATION MONITORING DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE)
+system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend\\ReadEGVUpopdata.r")), wait = TRUE, invisible = FALSE, intern = T)
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\PopulationTrend"), silent=T)
 load("EGVU_poptrend_input.RData")
@@ -108,19 +109,32 @@ breedinput<- breed %>% filter(Year>2005) %>%
 #fwrite(trendinput,"EGVU_adult_counts.csv")
 #fwrite(breedinput,"EGVU_breeding_summary.csv")
 
-### numbers for manuscript
+
+### numbers for manuscript ###
+# breed %>% filter(Year>2005) %>%
+#   rename(year=Year) %>%
+#   left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
+#   filter(!(Country %in% c("Niger"))) %>%    # introduced in 2020 to remove Niger data
+#   filter(!is.na(breed_success)) %>%
+#   group_by(territory_NAME) %>%
+#   summarise(Nyears=length(year))
+
+occu %>% filter(year>2005) %>%
+  filter(!(Country %in% c("Niger"))) %>%    # introduced in 2020 to remove Niger data
+  group_by(Country) %>%
+  summarise(N=length(unique(territory_NAME))) %>%
+  adorn_totals("row")
+
 breed %>% filter(Year>2005) %>%
   rename(year=Year) %>%
   left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
-  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
-  filter(!is.na(breed_success)) %>%
-  group_by(territory_NAME) %>%
-  summarise(Nyears=length(year))
-
-occu %>% filter(year>2005) %>%
-  filter(Country %in% c("Bulgaria","Greece")) %>%
+  filter(!(Country %in% c("Niger"))) %>%    # introduced in 2020 to remove Niger data
   group_by(Country) %>%
-  summarise(N=length(unique(territory_NAME)))
+  summarise(N=length(unique(territory_NAME))) %>%
+  adorn_totals("row")
+
+countrytrendinput %>% adorn_totals("col")
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD AND MANIPULATE JUVENILE TRACKING DATA
@@ -128,7 +142,7 @@ occu %>% filter(year>2005) %>%
 
 try(setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 #try(setwd("S:\\ConSci\\DptShare\\SteffenOppel\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
-system(paste0(Sys.getenv("R_HOME"), "/bin/i386/Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE)
+system(paste0("C:\\Program Files\\R\\R-3.5.1\\bin\\i386\\Rscript.exe ", shQuote("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\RODBC_telemetry_input.r")), wait = TRUE, invisible = FALSE, intern = T)
 load("RODBC_EGVU_telemetry_input.RData")
 head(locs)
 head(birds)
@@ -294,7 +308,15 @@ rm(locs)
 
 #### simple summaries for manuscript
 table(birds$origin)
+
 birds %>% filter(origin=="captive")
+
+birds %>% filter(origin=="wild") %>% filter(Age=="juv")
+birds %>% filter(origin=="wild") %>% filter(Age=="juv") %>%
+  mutate(surv=as.numeric(difftime(Stop_date,Fledge_date,"months"))/30) %>%
+  mutate(surv=ifelse(surv<8,0,surv)) %>%
+  group_by(surv) %>%
+  summarise(n=length(Name))
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
