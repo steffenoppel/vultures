@@ -90,7 +90,7 @@
     
     for (nyRpterr in 1:nprim.terrvis){
       rand.obs.terrvis[nyRpterr] ~ dnorm(0, tau.obs.terrvis)
-      rand.phi.terrvis[nyRpterr] ~ dnorm(0, tau.phi.terrvis)
+      rand.phi.terrvis[nyRpterr] ~ dnorm(rand.phi.offset[nyRpterr], tau.phi.terrvis)  ## include the decline in count data as prior mean for random effect
     }
     
     tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)

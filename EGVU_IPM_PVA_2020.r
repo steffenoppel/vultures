@@ -311,8 +311,13 @@ table(birds$origin)
 
 birds %>% filter(origin=="captive")
 
-birds %>% filter(origin=="wild") %>% filter(Age=="juv")
 birds %>% filter(origin=="wild") %>% filter(Age=="juv") %>%
+  mutate(surv=as.numeric(difftime(Stop_date,Fledge_date,"months"))/30) %>%
+  mutate(surv=ifelse(surv<8,0,surv)) %>%
+  group_by(surv) %>%
+  summarise(n=length(Name))
+
+birds %>% filter(origin=="captive") %>%
   mutate(surv=as.numeric(difftime(Stop_date,Fledge_date,"months"))/30) %>%
   mutate(surv=ifelse(surv<8,0,surv)) %>%
   group_by(surv) %>%
@@ -459,7 +464,18 @@ for (l in 1:dim(z.terrvis)[1]){
 }
 
 
+### PREPARE RANDOM YEAR OFFSET FOR ADULT SURVIVAL
 
+rand.phi.offset<-countrytrendinput %>% gather(key="Country", value="N",-year) %>%
+  mutate(prop=ifelse(is.na(N),0,country.props[match(Country,names(country.props))])) %>%
+  group_by(year) %>%
+  summarise(N=sum(N,na.rm=T),prop=sum(prop)) %>%
+  mutate(TOT=N/prop) %>%
+  mutate(surv=dplyr::lead(TOT)/TOT) %>%
+  mutate(surv=ifelse(is.na(surv),0.999999,surv)) %>%
+  mutate(surv=ifelse(surv>0.99,0.999999,surv)) %>%
+  mutate(ann.phi=log(surv/(1 - surv)),phi.mean=log(0.93/(1 - 0.93))) %>%
+  mutate(rand.phi.offset=ann.phi-phi.mean)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # PREPARE DATA FOR JAGS
@@ -562,6 +578,7 @@ INPUT <- list(y.terrvis = y.terrvis,
               nprim.terrvis = K.terrvis,
               phase=c(1,1,1,1,1,1,1,2,2,2,2,2,2,2), ### starts in 2006, ends 2019 - phase switch after 2012
               #phase=as.matrix(param.terrvis[,2:dim(param.terrvis)[2]]), ### allow phase to vary between GR and BG - this is horribly complicated and I abandoned it immediately
+              rand.phi.offset=rand.phi.offset$rand.phi.offset, ### specification of random annual survival offset on logit scale
               eff.terrvis=obseff.terrvis,
               firstobs=first.obs,
               f.obsvis=f.obsvis, 
@@ -1589,7 +1606,7 @@ cat("
     
     for (nyRpterr in 1:nprim.terrvis){
       rand.obs.terrvis[nyRpterr] ~ dnorm(0, tau.obs.terrvis)
-      rand.phi.terrvis[nyRpterr] ~ dnorm(0, tau.phi.terrvis)
+      rand.phi.terrvis[nyRpterr] ~ dnorm(rand.phi.offset[nyRpterr], tau.phi.terrvis)  ## include the decline in count data as prior mean for random effect
     }
     
     tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)
@@ -1869,8 +1886,19 @@ sink()
 
 
 
+### PLOT RAW COUNT DATA 
+
+countrytrendinput %>% gather(key="Country", value="N",-year) %>%
+  ggplot()+
+  geom_line(aes(x=year, y=N, col=Country), size=1)
+
+rand.phi.offset
+
+str(country.props)
+countrytrendinput %>% adorn_totals("col") %>%
+  mutate(prop=)
 
 
-
-
-
+  
+  
+  
