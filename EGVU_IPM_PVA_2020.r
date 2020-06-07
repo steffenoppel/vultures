@@ -52,6 +52,9 @@
 ### 18 May 2020: huge discussion whether to use only core area from Rhodopes or not -> outsourced into new script
 ### 27 May 2020: included Albania and N Macedonia and adjusted model to have single constant adult survival
 
+### FINALISED ON 5 JUNE 2020 by including random effect for annual adult survival
+### MODEL CONVERGED WITH 30,000 iterations
+
 library(readxl)
 library(jagsUI)
 library(tidyverse)
@@ -288,6 +291,10 @@ f.telemetry<-apply(y.telemetry,1,get.first.telemetry)
 l.telemetry<-apply(y.telemetry,1,get.last.telemetry)
 
 rm(locs)
+
+#### simple summaries for manuscript
+table(birds$origin)
+birds %>% filter(origin=="captive")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -571,7 +578,7 @@ INPUT <- list(y.terrvis = y.terrvis,
 
 ## Parameters to be estimated ('monitored') by JAGS
 paraIPM<-c("mu.fec","lambda.t","b.phi.age","b.phi.capt","b.phi.mig","ann.phi.capt.rel.first.year",
-           "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry",      #"breed.prop4","breed.prop5",
+           "ann.phi.juv.telemetry","ann.phi.sec.telemetry","ann.phi.third.telemetry", "ann.phi.terrvis",     #"breed.prop4","breed.prop5",
            "mean.phi.terrvis","mean.lambda","fut.lambda","Nterr", "Nterr.f")
 
 
@@ -709,7 +716,7 @@ NeoIPM.ALL <- autojags(data=INPUT,
                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
 
 
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v2_30y.RData")
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v3_30y.RData")
 
 
 
@@ -1552,7 +1559,7 @@ cat("
     
     #for (nypterr in 1:2){   ## only 2 survival periods
     lm.phi.terrvis <- log(mean.phi.terrvis/(1 - mean.phi.terrvis))    # logit transformed survival intercept		      
-    mean.phi.terrvis ~ dunif(0.75, 1)   # informative prior for annual survival probabilities BEFORE 2016
+    mean.phi.terrvis ~ dunif(0.75, 1)                                 # informative prior for annual survival probabilities
     #}    
     
     
@@ -1567,7 +1574,7 @@ cat("
     sd.obs.terrvis ~ dunif(0, 3)
 
     tau.phi.terrvis <- 1 / (sd.phi.terrvis * sd.phi.terrvis)
-    sd.phi.terrvis ~ dunif(0, 3)
+    sd.phi.terrvis ~ dunif(0, 0.01)
     
     
     # Priors for population process and immigration

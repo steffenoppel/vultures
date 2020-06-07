@@ -82,7 +82,7 @@
     
     #for (nypterr in 1:2){   ## only 2 survival periods
     lm.phi.terrvis <- log(mean.phi.terrvis/(1 - mean.phi.terrvis))    # logit transformed survival intercept		      
-    mean.phi.terrvis ~ dunif(0.75, 1)   # informative prior for annual survival probabilities BEFORE 2016
+    mean.phi.terrvis ~ dunif(0.75, 1)                                 # informative prior for annual survival probabilities
     #}    
     
     
@@ -97,7 +97,7 @@
     sd.obs.terrvis ~ dunif(0, 3)
 
     tau.phi.terrvis <- 1 / (sd.phi.terrvis * sd.phi.terrvis)
-    sd.phi.terrvis ~ dunif(0, 3)
+    sd.phi.terrvis ~ dunif(0, 0.01)
     
     
     # Priors for population process and immigration
