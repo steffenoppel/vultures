@@ -327,7 +327,7 @@ FUTLAM %>% mutate(n.rel=as.numeric(n.rel)) %>%
         strip.text.y=element_text(size=14, color="black"), 
         strip.background=element_rect(fill="white", colour="black"))
 
-ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v3.jpg", width=10, height=8)
+ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v4.jpg", width=10, height=8)
 #ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chickremoval.jpg", width=10, height=8)
 #ggsave("EGVU_future_growth_rate_allScenarios_IPM2020_v1_chicksupplementation.jpg", width=10, height=8)
 
@@ -408,8 +408,8 @@ head(samplesout)
 head(extprop)
 dim(extprop)
 
-fwrite(extprop,"EGVU_ext_prob_all_scenarios_IPM2020_v3.csv")
-extprop<-fread("EGVU_ext_prob_all_scenarios_IPM2020_v3.csv")
+fwrite(extprop,"EGVU_ext_prob_all_scenarios_IPM2020_v4.csv")
+extprop<-fread("EGVU_ext_prob_all_scenarios_IPM2020_v4.csv")
 
 
 
@@ -464,7 +464,7 @@ ggplot(data=extprop)+
         strip.text.y=element_text(size=14, color="black"),
         strip.background=element_rect(fill="white", colour="black"))
 
-ggsave("EGVU_extinction_probability_allScenarios_IPM2020_v3.jpg", width=9, height=6)
+ggsave("EGVU_extinction_probability_allScenarios_IPM2020_v4.jpg", width=9, height=6)
 
 
 
