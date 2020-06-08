@@ -749,11 +749,9 @@ for (l in 1:dim(enchist.terrvis)[1]){
 range(effort.terrvis)
 eff.scale<-scale(0:1993)
 
-INPUT$y.count=as.matrix(countrytrendinput[,2:5])
 INPUT$y.terrvis = enchist.terrvis
 INPUT$nsite.terrvis = nrow(enchist.terrvis)
 INPUT$nprim.terrvis = ncol(enchist.terrvis)
-INPUT$phase=c(1,1,1,1,1,1,2,2,2,2,2,2,2,2)  ## cutoff in 2012
 INPUT$eff.terrvis=scale(effort.terrvis)
 INPUT$firstobs=first.obs
 INPUT$f.obsvis=f.obsvis
@@ -771,7 +769,7 @@ initIPM <- function(){list(mean.p.terrvis=runif(1,0.5,1),
 
 
 
-NeoIPM.ALL <- autojags(data=INPUT,
+NeoIPM.SIMPLE <- autojags(data=INPUT,
                        inits=initIPM,
                        parameters.to.save=paraIPM,
                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v4.jags",    ## was EGVU_IPM_2019_COMBINED.jags
@@ -899,12 +897,12 @@ cat("
     # Priors for population process and immigration
     
     # Initial population sizes for first year of monitoring
-    nestlings[1] ~ dunif(70, 120)   ##changed from JUV
-    N1[1] ~ dunif(15, 45)
+    nestlings[1] ~ dunif(50, 100)   ##changed from JUV
+    N1[1] ~ dunif(10, 35)
     N2[1] ~ dunif(5, 20)
-    N3[1] ~ dunif(5, 15)
-    N4[1] ~ dunif(4, 14)
-    N5[1] ~ dunif(3, 13)
+    N3[1] ~ dunif(3, 15)
+    N4[1] ~ dunif(0, 10)
+    N5[1] ~ dunif(0, 5)
     N6[1] ~ dunif(190, 250)
     
     
@@ -1198,7 +1196,7 @@ cat("
     
     # Priors and constraints FOR POPULATION COUNTS OBSERVATION
     for (s in 1:countries){			### start loop over every country
-      sigma.obs.count[s] ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
+      sigma.obs.count[s] ~ dunif(0.1,100)	#Prior for SD of observation process (variation in detectability)
       tau.obs.count[s]<-pow(sigma.obs.count[s],-2)
     }
     
@@ -1270,13 +1268,13 @@ cat("
     # Priors for population process and immigration
     
     # Initial population sizes for first year of monitoring
-    nestlings[1] ~ dunif(70, 120)   ##changed from JUV
-    N1[1] ~ dunif(15, 45)
+    nestlings[1] ~ dunif(50, 100)   ##changed from JUV
+    N1[1] ~ dunif(10, 35)
     N2[1] ~ dunif(5, 20)
-    N3[1] ~ dunif(5, 15)
-    N4[1] ~ dunif(4, 14)
-    N5[1] ~ dunif(3, 13)
-    N6[1] ~ dunif(190, 250)
+    N3[1] ~ dunif(3, 15)
+    N4[1] ~ dunif(0, 10)
+    N5[1] ~ dunif(0, 5)
+    N6[1] ~ dunif(200, 250)
     
     
     #-------------------------------------------------  
