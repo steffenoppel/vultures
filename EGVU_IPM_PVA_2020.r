@@ -759,7 +759,7 @@ INPUT$f.obsvis=f.obsvis
 
 initIPM <- function(){list(mean.p.terrvis=runif(1,0.5,1),
                            mean.phi.terrvis=runif(2,0.75, 1),
-                           sigma.obs.count=runif(4,0,10),
+                           sigma.obs.count=runif(4,0.1,100),
                            mu.fec = runif(1,0,1),
                            z.telemetry = z.telemetry,
                            mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
@@ -776,7 +776,7 @@ NeoIPM.SIMPLE <- autojags(data=INPUT,
                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
 
 
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v4_TOTAL_CRAP.RData")
+save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v4_FINAL.RData")
 
 
 
