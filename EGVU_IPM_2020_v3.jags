@@ -23,7 +23,7 @@
     
     # Priors and constraints FOR POPULATION COUNTS OBSERVATION
     for (s in 1:countries){			### start loop over every country
-      sigma.obs.count[s] ~ dunif(0,100)	#Prior for SD of observation process (variation in detectability)
+      sigma.obs.count[s] ~ dunif(0.1,100)	#Prior for SD of observation process (variation in detectability)
       tau.obs.count[s]<-pow(sigma.obs.count[s],-2)
     }
     
@@ -90,14 +90,14 @@
     
     for (nyRpterr in 1:nprim.terrvis){
       rand.obs.terrvis[nyRpterr] ~ dnorm(0, tau.obs.terrvis)
-      rand.phi.terrvis[nyRpterr] ~ dnorm(rand.phi.offset[nyRpterr], tau.phi.terrvis)  ## include the decline in count data as prior mean for random effect
+      rand.phi.terrvis[nyRpterr] ~ dnorm(0, tau.phi.terrvis)  ## include the decline in count data as prior mean for random effect
     }
     
     tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)
     sd.obs.terrvis ~ dunif(0, 3)
 
     tau.phi.terrvis <- 1 / (sd.phi.terrvis * sd.phi.terrvis)
-    sd.phi.terrvis ~ dunif(0, 0.01)
+    sd.phi.terrvis ~ dunif(0, 0.05)
     
     
     # Priors for population process and immigration
@@ -109,7 +109,7 @@
     N3[1] ~ dunif(5, 15)
     N4[1] ~ dunif(4, 14)
     N5[1] ~ dunif(3, 13)
-    N6[1] ~ dunif(190, 220)
+    N6[1] ~ dunif(190, 250)
     
     
     #-------------------------------------------------  
@@ -142,7 +142,7 @@
       Nterr[tlc] <- N4[tlc] * 0.024 + N5[tlc] * 0.124 + N6[tlc]                                    ### number of observable territorial birds
       for (s in 1:countries){			### start loop over every country
         Nterr.country[tlc,s] ~ dbin(country.prop[s],round(Nterr[tlc]))
-        y.count[tlc,s] ~ dnorm(Nterr[tlc], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
+        y.count[tlc,s] ~ dnorm(Nterr.country[tlc,s], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
       }
       
       
