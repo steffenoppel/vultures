@@ -166,6 +166,7 @@ birds<-birds %>% filter(Age %in% c("juv","2cal_year")) %>%
   filter(Tag_date<ymd("2019-10-01")) %>%
   filter(!Name=="Zighmund") %>%            ### remove single bird that was never free flying
   filter(!release_method %in% c("hacking","fostering")) %>%            ### remove hacked and fostered birds as we will not use that technique
+  #filter(!(Region %in% c("Oromia","Afar")))  %>%               ### OPTIONAL: USE ONLY BALKAN BIRDS
   dplyr::select(Name,Age,Tag_year,origin,release_method,Status,Fledge_date,Stop_date,Reason_death) %>%
   arrange(Tag_year) %>%
   
@@ -715,16 +716,16 @@ initIPM <- function(){list(lmu.p.terrvis=runif(dim(z.terrvis)[1],-3, 2),
                            base.recover.telemetry = rnorm(1,0, 0.001))}   
 
 
-
-NeoIPM.ALL <- autojags(data=INPUT,
-                       inits=initIPM,
-                       parameters.to.save=paraIPM,
-                       model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v3.jags",    ## was EGVU_IPM_2019_COMBINED.jags
-                       n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
-
-
-save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v3_30y.RData")
-
+# 
+# NeoIPM.ALL <- autojags(data=INPUT,
+#                        inits=initIPM,
+#                        parameters.to.save=paraIPM,
+#                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v3.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+#                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
+# 
+# 
+# save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v3_30y.RData")
+# 
 
 
 
