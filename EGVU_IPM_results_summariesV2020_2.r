@@ -61,14 +61,14 @@ load("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_I
 ## 3 models were run, select the one for which output should be produced
 
 FOCMOD<-NeoIPM.SIMPLE
-#FOCMOD<-NeoIPM.chickremoval
+#FOCMOD<-NeoIPM.EGGREMOVAL
 #FOCMOD<-NeoIPM.chicksupplement
 
 
 ### create data frame of model output
 out<-as.data.frame(FOCMOD$summary)  ## changed from NeoIPMbasic
 out$parameter<-row.names(FOCMOD$summary) ## changed from NeoIPMbasic
-#write.table(out,"EGVU_IPM_estimates_v3.csv", sep=",", row.names=F)
+#write.table(out,"EGVU_IPM_estimates_v4eggremoval.csv", sep=",", row.names=F)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOOK UP SCENARIOS FROM MATRIX OF RELEASE AND SURVIVAL SCENARIOS
@@ -227,7 +227,7 @@ ggplot()+
         strip.background=element_rect(fill="white", colour="black"))
 
 ggsave("EGVU_population_projection_BASELINE_IPM2020_v4.jpg", width=9, height=6)
-#ggsave("EGVU_population_projection_BASELINE_IPM2020_v1_chickremoval.jpg", width=9, height=6)
+#ggsave("EGVU_population_projection_BASELINE_IPM2020_v4_eggremoval.jpg", width=9, height=6)
 
 
 

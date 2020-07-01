@@ -780,6 +780,7 @@ initIPM <- function(){list(mean.p.terrvis=runif(1,0.5,1),
                            base.recover.telemetry = rnorm(1,0, 0.001))}   
 
 
+### THE MODEL WITH ALL SCENARIOS RELEVANT FOR THE MANUSCRIPT ###
 
 NeoIPM.SIMPLE <- autojags(data=INPUT,
                        inits=initIPM,
@@ -787,7 +788,22 @@ NeoIPM.SIMPLE <- autojags(data=INPUT,
                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v4.jags",    ## was EGVU_IPM_2019_COMBINED.jags
                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
 
+
+
+### THE MODEL FOR THE FEASIBILITY STUDY THAT ASSUMES THAT FOR 5 YEARS EGGS ARE HARVESTED ###
+
 INPUT$J.fec.red=breedinput1EGG$J
+initIPM <- function(){list(mean.p.terrvis=runif(1,0.5,1),
+                           mean.phi.terrvis=runif(2,0.75, 1),
+                           sigma.obs.count=runif(4,0.1,100),
+                           mu.fec = runif(2,0,1),
+                           z.telemetry = z.telemetry,
+                           mean.phi.telemetry = runif(1, 0.9, 0.999), ### two intercepts for juvenile and adults
+                           base.obs.telemetry = rnorm(1,0, 0.001),                # Prior for intercept of observation probability on logit scale
+                           base.fail.telemetry = rnorm(1,0, 0.001),               # Prior for intercept of tag failure probability on logit scale
+                           base.recover.telemetry = rnorm(1,0, 0.001))}   
+
+
 NeoIPM.EGGREMOVAL <- autojags(data=INPUT,
                           inits=initIPM,
                           parameters.to.save=paraIPM,
