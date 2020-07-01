@@ -107,7 +107,18 @@ breedinput<- breed %>% filter(Year>2005) %>%
   group_by(year) %>%
   summarise(R=sum(count), J=sum(fledglings))
 
+### MODIFY BREEDINPUT FOR EGG HARVEST ###
 
+breedinput1EGG<- breed %>% filter(Year>2005) %>%
+  rename(year=Year) %>%
+  left_join(occu[,1:4], by=c("territory_NAME","year")) %>%
+  filter(Country %in% c("Bulgaria","Greece")) %>%    # introduced in 2019 because database now has data from albania and Macedonia
+  filter(!is.na(breed_success)) %>%
+  mutate(count=1) %>%
+  mutate(fledglings=ifelse(is.na(fledglings),0,fledglings)) %>%
+  mutate(fledglings=ifelse(fledglings==2,1,fledglings)) %>%     ### remove the second egg and fledgling
+  group_by(year) %>%
+  summarise(R=sum(count), J=sum(fledglings))
 
 
 ### PLOT RAW COUNT DATA 
@@ -604,7 +615,7 @@ INPUT <- list(y.terrvis = y.terrvis,
               
               R.fec=breedinput$R,
               J.fec=breedinput$J,
-              #J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
+              J.fec.red=breedinput1EGG$J,   ## added to model fecundity when second egg is removed
               
               country.prop=country.props,  ## proportion of count data that come from countries ALB, BG, GR, NMD
               countries=4,
@@ -775,6 +786,13 @@ NeoIPM.SIMPLE <- autojags(data=INPUT,
                        parameters.to.save=paraIPM,
                        model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v4.jags",    ## was EGVU_IPM_2019_COMBINED.jags
                        n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
+
+INPUT$J.fec.red=breedinput1EGG$J
+NeoIPM.EGGREMOVAL <- autojags(data=INPUT,
+                          inits=initIPM,
+                          parameters.to.save=paraIPM,
+                          model.file="C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\PopulationModel\\vultures\\EGVU_IPM_2020_v4eggremoval.jags",    ## was EGVU_IPM_2019_COMBINED.jags
+                          n.chains=nc, n.thin=nt, n.burnin=nb, parallel=T)##n.iter=ni,
 
 
 save.image("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v4_FINAL.RData")
