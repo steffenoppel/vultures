@@ -6,23 +6,17 @@
 # original model based on Lieury et al. 2015: Relative contribution of local demography and immigration in the recovery of a geographically-isolated population of the endangered Egyptian vulture. Biological Conservation 191: 349-356.
 
 library(jagsUI)
-library(tidyverse)
-load("https:\\github.com\\steffenoppel\\vultures\\Balkan_EGVU_PVA_DATA.RData")
-# load("C:\\STEFFEN\\MANUSCRIPTS\\in_prep\\EGVU_papers\\PVA_CaptiveRelease\\EGVU_IPM2020_output_v4_FINAL.RData")
-# rm(list=setdiff(ls(), c("z.telemetry","INPUT")))
-# head(INPUT)
-# INPUT$nrep.terrvis<-NULL
-# INPUT$rand.phi.offset<-NULL
-# INPUT$J.fec.red<-NULL
-# save.image("Balkan_EGVU_PVA_DATA.RData")
-
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # EXPLANATION OF INPUT DATA
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### the object 'INPUT' is a list with the following elements:
+### download the input file containing all formatted data: "https:\\github.com\\steffenoppel\\vultures\\Balkan_EGVU_PVA_DATA.RData"
+load("Balkan_EGVU_PVA_DATA.RData") 
 str(INPUT)
+
+### the object 'INPUT' is a list with the following elements:
+
 # y.terrvis: matrix of territory occupancy for 87 territories (rows) over 14 years (columns) with maximum number of adult birds observed per territory and year
 # z.terrvis: matrix of initial values for territory occupancy for 87 territories (rows) over 14 years (columns) to initiate the estimation
 # eff.terrvis: matrix of territory monitoring effort for 87 territories (rows) over 14 years (columns) scaled to the range -2 to +2
@@ -453,7 +447,7 @@ initIPM <- function(){list(mean.p.terrvis=runif(1,0.5,1),
 EGVU.IPM <- jags(data=INPUT,
                        inits=initIPM,
                        parameters.to.save=paraIPM,
-                       model.file="C:/STEFFEN/RSPB/Bulgaria/Analysis/PopulationModel/vultures/EGVU_IPM_Balkans.jags",    
+                       model.file="EGVU_IPM_Balkans.jags",    
                        n.chains=nc, n.thin=nt, n.burnin=nb, n.iter=ni,parallel=T)
 
 
