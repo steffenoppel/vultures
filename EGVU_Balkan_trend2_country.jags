@@ -1,0 +1,73 @@
+
+    model{
+    
+    # Priors and constraints
+    
+    N.est.count[1,1] ~ dunif(20,40)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,2] ~ dunif(60,100)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,3] ~ dunif(30,60)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,4] ~ dunif(40,70)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    
+  for (t in 1:2) {   ###allow two separate time trends
+    mean.lambda.count[t] ~ dunif(0.1,2)	#Prior for mean growth rate
+    sigma.proc.count[t]  ~ dunif(0.1,10)	#Prior for SD of state process (annual variation in pop size)
+    sigma2.proc.count[t] <-pow(sigma.proc.count[t] ,2)
+    tau.proc.count[t] <-pow(sigma.proc.count[t] ,-2)
+  }
+    
+    # Priors and constraints FOR POPULATION COUNTS OBSERVATION
+    for (s in 1:countries){			### start loop over every country
+      sigma.obs.count[s] ~ dunif(0.1,100)	#Prior for SD of observation process (variation in detectability)
+      tau.obs.count[s]<-pow(sigma.obs.count[s],-2)
+    }
+    
+    
+    
+    ##### Likelihood function
+    
+    ## State process for entire time series
+    
+    for (t in 1:(T.count-1)){
+      for (s in 1:countries){			### start loop over every country
+        lambda.count[t,s] ~ dnorm(mean.lambda.count[period[t]], tau.proc.count[period[t]])								# Distribution for random error of growth rate
+        N.est.count[t+1,s]<-N.est.count[t,s]*lambda.count[t,s]										# Linear predictor (population size based on past pop size and change rate)
+      }
+    }
+    ## Observation process
+    for (t in 1:T.count){
+      for (s in 1:countries){			### start loop over every country
+        y.count[t,s] ~ dnorm(N.est.count[t,s], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
+      }
+    }
+
+
+    ##### Derived quantity
+    for (t in 1:T.count){
+      Ntot[t]<-sum(N.est.count[t,])
+    }
+    
+    
+  # Assessing the fit of the state-space model
+  # 1. Compute fit statistic for observed data
+  # Discrepancy measure: mean absolute error
+  for (t in 1:T.count){
+    C.exp[t] <- Ntot[t]                            # Expected counts
+    C.act[t] <- sum(y.count[t,])
+    Dssm.obs[t] <- abs((C.act[t] - C.exp[t]) / C.act[t])           # Discrepancy measure
+  }
+  Dmape.obs <- sum(Dssm.obs)
+
+  # 2. Compute fit statistic for replicate data
+  # Discrepancy measure: mean absolute error
+  for (t in 1:T.count){
+        for (s in 1:countries){			### start loop over every country
+         C.rep.c[t,s] ~ dnorm(N.est.count[t,s], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
+      }
+    C.rep[t] <- sum(C.rep.c[t,])                 # Generate replicate data
+    Dssm.rep[t] <- abs((C.rep[t] - C.exp[t]) / C.rep[t])   # Discrepancy measure
+  }
+  Dmape.rep <- sum(Dssm.rep)
+    
+    
+}														# close the model loop
+    

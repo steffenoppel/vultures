@@ -1,0 +1,98 @@
+
+    model {
+    #-------------------------------------------------
+    # - adult survival based on territory occupancy of 1 or 2 adults
+    # - annual survival constant from 2006-2015, and 2015-2022
+    #-------------------------------------------------
+    
+    
+    #-------------------------------------------------  
+    # 1. PRIORS FOR ALL DATA SETS
+    #-------------------------------------------------
+    
+    # Priors and constraints FOR ADULT SURVIVAL FROM TERRITORY MONITORING
+    
+    ## Priors for detection probability
+    lmu.p.terrvis <- log(mean.p.terrvis/(1 - mean.p.terrvis))    # logit transformed detection intercept
+    mean.p.terrvis ~ dunif(0.5, 1)			
+    
+    # Det prob relationship with observation effort
+    beta.obs.eff.terrvis ~ dnorm(0, 0.0001)
+    
+    
+    # Priors for survival
+    for (nypterr in 1:2){   ## only 2 survival periods
+      mean.phi.terrvis[nypterr] ~ dunif(0.5, 1)   # informative prior for annual survival probabilities BEFORE/AFTER 2016
+      #mean.rec.terrvis[nypterr] ~ dunif(0, 1)   # informative prior for annual recruitment probabilities BEFORE/AFTER 2016 
+    }
+    
+    # Priors for recruitment
+   #mean.rec.terrvis[1] <- 0   # no recruitment can occur if already 2 adults in territory
+   # for (curr.occ in 2:3){   ## only 2 probabilities depending on whether territory is occupied by 1 or 2 birds
+   #   mean.rec.terrvis[curr.occ] ~ dunif(0, 1)   # uninformative prior for annual recruitment probabilities BEFORE/AFTER 2016
+   # }  
+   mean.rec.terrvis ~ dunif(0, 1)   # informative prior for annual recruitment probabilities BEFORE/AFTER 2016    
+    
+    ### RANDOM OBSERVATION EFFECT FOR EACH TERRITORY AND YEAR
+    
+    for (nyRpterr in 1:nprim.terrvis){
+      for (nsit in 1:nsite.terrvis){
+        rand.obs.terrvis[nsit,nyRpterr] ~ dnorm(0, tau.obs.terrvis)
+        }
+    }
+    
+    tau.obs.terrvis <- 1 / (sd.obs.terrvis * sd.obs.terrvis)
+    sd.obs.terrvis ~ dunif(0, 3)
+    
+    
+    # -------------------------------------------------        
+    # 2.5. Likelihood for adult survival from territory monitoring
+    # -------------------------------------------------
+    
+    ### ECOLOGICAL STATE MODEL WITH ESTIMATE OF SURVIVAL
+    
+    for (ilterr in 1:nsite.terrvis){
+      x.terrvis[ilterr,f.obsvis[ilterr]] <- 2  ## firstobs[ilterr] for whatever reason, the model ALWAYS comes back with invalid parent error if we use actual data
+    
+      for (klterr in (f.obsvis[ilterr]+1):nprim.terrvis){
+        z.terrvis[ilterr,klterr] ~ dbin(mean.phi.terrvis[phase[klterr]],x.terrvis[ilterr,klterr-1])
+        mu.x[ilterr,klterr] ~ dbin(mean.rec.terrvis,(2-z.terrvis[ilterr,klterr]))
+        x.terrvis[ilterr,klterr] <- mu.x[ilterr,klterr] + z.terrvis[ilterr,klterr]
+
+      } 						# close klterr loop over primary period  - years
+    } 							# close ilterr loop over sites
+    
+    ### OBSERVATION MODEL WITH RANDOM EFFECT OF YEAR
+
+    for (iobs in 1:nsite.terrvis){
+      for (kobs in f.obsvis[iobs]:nprim.terrvis){
+        linpred.terrvis[iobs,kobs] <- lmu.p.terrvis+beta.obs.eff.terrvis*eff.terrvis[iobs,kobs] + rand.obs.terrvis[iobs,kobs]
+        p.terrvis[iobs,kobs] <- 1 / (1 + exp(-linpred.terrvis[iobs,kobs]))
+        y.terrvis[iobs,kobs] ~ dbin(min(1,p.terrvis[iobs,kobs]), x.terrvis[iobs,kobs])
+        
+        
+        ## GOODNESS OF FIT TEST SECTION
+        ## Expected occupancy at site iobs, survey kobs
+        exp.terr[iobs,kobs] <- p.terrvis[iobs,kobs] * x.terrvis[iobs,kobs] 
+    
+        ## Discrepancy 
+        ## (note small value added to denominator to avoid potential divide by zero)
+        E.obs.terr[iobs,kobs] <- pow((y.terrvis[iobs,kobs] - exp.terr[iobs,kobs]), 2) / (exp.terr[iobs,kobs] + 0.5)
+
+        ## Simulate new count from model
+        y.rep.terr[iobs,kobs] ~ dbin(p.terrvis[iobs,kobs], x.terrvis[iobs,kobs])
+
+        ## Discrepancy 
+        E.rep.terr[iobs,kobs] <- pow((y.rep.terr[iobs,kobs] - exp.terr[iobs,kobs]), 2) / (exp.terr[iobs,kobs] + 0.5)
+
+      } 						 # close kobs loop over year
+      fit.terr.temp[iobs] <- sum(E.obs.terr[iobs,f.obsvis[iobs]:nprim.terrvis])
+      fit.rep.terr.temp[iobs] <- sum(E.rep.terr[iobs,f.obsvis[iobs]:nprim.terrvis])
+    } 							# close iobs loop over sites
+    
+    # chi-squared test statistics
+    fit.terr <- sum(fit.terr.temp[])
+    fit.rep.terr <- sum(fit.rep.terr.temp[])
+    
+    } # END of the JAGS model
+    
