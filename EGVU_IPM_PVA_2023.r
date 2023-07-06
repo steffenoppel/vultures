@@ -320,11 +320,11 @@ initIPM <- function(){list(z.telemetry = z.telemetry,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## MCMC settings
-ns<-1000  	## number of iterations (draws per chain)
-nt<-25		  ## thinning rate
-nb<-500	  ## length of burn-in (number of iterations discarded at the start of each chain until convergence is reached)
+ns<-50000  	## number of iterations (draws per chain)
+nt<-5		  ## thinning rate
+nb<-15000	  ## length of burn-in (number of iterations discarded at the start of each chain until convergence is reached)
 nc<-3		    ## number of chains
-nad<-100
+nad<-5000
 
 
 
@@ -351,13 +351,16 @@ MCMCsummary(EGVU_PVA$mcmc)
 EV.gof<-as.data.frame(summary(EGVU_PVA, vars=c("Dmape.rep","Dmape.obs")))
 EV.gof$parameter<-as.character(row.names(EV.gof))
 
-OBS <- EGVU_PVA$mcmc[[1]][,141]
-REP <- EGVU_PVA$mcmc[[1]][,140]
-tibble(Rep=REP,obs=OBS) %>%
-  ggplot(aes(x=REP,y=OBS)) + geom_point() +
-  geom_abline(intercept = 0, slope = 1)
+OBS <- MCMCpstr(EGVU_PVA$mcmc, params=c("Dmape.obs"), type="chains")
+REP <- MCMCpstr(EGVU_PVA$mcmc, params=c("Dmape.rep"), type="chains")
+GOF<-tibble(Rep=as.numeric(REP[[1]]),Obs=as.numeric(OBS[[1]])) %>%
+  mutate(P=ifelse(Obs>Rep,1,0))
 
-PVAL=round(mean(REP > OBS),2)
+ggplot(GOF,aes(x=Rep,y=Obs)) + geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  annotate("text",label=as.character(mean(GOF$P)),x=5,y=6)
+
+mean(GOF$P)
 
 
 
@@ -416,9 +419,9 @@ ncr.lu<-capt.rel.mat %>% gather(key=Scenario, value=n.released,-Year) %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 out$parameter
 head(out)
-TABLE1<-out %>% filter(parameter %in% c('mean.lambda','mean.phi.terrvis[1]','mean.phi.terrvis[2]',
+TABLE1<-out %>% filter(parameter %in% c('baseline.lambda','LIFE.lambda','mean.phi.terrvis[1]','mean.phi.terrvis[2]',
                                         'ann.phi.juv.telemetry[1]',"ann.phi.capt.rel.first.year[1]",'ann.phi.sec.telemetry[1]','ann.phi.third.telemetry[1]',
-                                        'ann.phi.juv.telemetry[17]',"ann.phi.capt.rel.first.year[17]",'ann.phi.sec.telemetry[17]','ann.phi.third.telemetry[17]',
+                                        'ann.phi.juv.telemetry[2]',"ann.phi.capt.rel.first.year[2]",'ann.phi.sec.telemetry[2]','ann.phi.third.telemetry[2]',
                                         'mu.fec')) %>%
   select(parameter,Median,Lower95,Upper95)
 TABLE1$Parameter<-c("fecundity","delayed release first year survival","wild first year survival","wild second year survival", "wild third year survival","adult survival (good year)","adult survival (poor year)","population growth rate")
@@ -717,11 +720,11 @@ cat("
     lp.mean.telemetry <- log(mean.phi/(1 - mean.phi))    # logit transformed survival intercept
 
     #### SLOPE PARAMETERS FOR SURVIVAL PROBABILITY
-    b.phi.age ~ dunif(0, 5)           # Prior for age effect on survival probability on logit scale - should be positive
-    b.phi.capt ~ dnorm(0, 0.001)         # Prior for captive release on survival probability on logit scale
+    b.phi.age ~ dnorm(1, 0.001)           # Prior for age effect on survival probability on logit scale - should be positive
+    b.phi.capt ~ dnorm(-1, 0.001)         # Prior for captive release on survival probability on logit scale
     b.phi.mig ~ dunif(-2,0)         # Prior for COST OF MIGRATION migration on survival probability on logit scale
-    b.phi.LIFE ~ dnorm(0, 0.001)         # Prior for LIFE effect on survival probability on logit scale    
-    b.phi.long ~ dnorm(0, 0.001)         # Prior for longitudinal effect on survival probability on logit scale  
+    b.phi.LIFE ~ dnorm(1, 0.001)         # Prior for LIFE effect on survival probability on logit scale    
+    b.phi.long ~ dnorm(1.5, 0.001)         # Prior for longitudinal effect on survival probability on logit scale  
     
     #### TAG FAILURE AND LOSS PROBABILITY
     for (i in 1:nind){
@@ -999,34 +1002,10 @@ cat("
     
     
     #### SUMMARISE ANNUAL SURVIVAL PROBABILITY
-    ann.phi.juv.telemetry[tt]<-prod(phi.wild.telemetry[1:12,LIF])
-    # phi.wild.telemetry[2,phase[tt]]*
-    # phi.wild.telemetry[3,phase[tt]]*
-    # phi.wild.telemetry[4,phase[tt]]*
-    # phi.wild.telemetry[5,phase[tt]]*
-    # phi.wild.telemetry[6,phase[tt]]*
-    # phi.wild.telemetry[7,phase[tt]]*
-    # phi.wild.telemetry[8,phase[tt]]*
-    # phi.wild.telemetry[9,phase[tt]]*
-    # phi.wild.telemetry[10,phase[tt]]*
-    # phi.wild.telemetry[11,phase[tt]]*
-    # phi.wild.telemetry[12,phase[tt]]					### multiply monthly survival from age 1-12
-    
-    ann.phi.sec.telemetry[tt]<-prod(phi.wild.telemetry[13:24,LIF])
-    # phi.wild.telemetry[14,phase[tt]]*
-    # phi.wild.telemetry[15,phase[tt]]*
-    # phi.wild.telemetry[16,phase[tt]]*
-    # phi.wild.telemetry[17,phase[tt]]*
-    # phi.wild.telemetry[18,phase[tt]]*
-    # phi.wild.telemetry[19,phase[tt]]*
-    # phi.wild.telemetry[20,phase[tt]]*
-    # phi.wild.telemetry[21,phase[tt]]*
-    # phi.wild.telemetry[22,phase[tt]]*
-    # phi.wild.telemetry[23,phase[tt]]*
-    # phi.wild.telemetry[24,phase[tt]]					### multiply monthly survival from age 13-24
-    ann.phi.third.telemetry[tt]<-prod(phi.wild.telemetry[25:36,LIF]) ##*phi.wild.telemetry[26,phase[tt]]*phi.wild.telemetry[27,phase[tt]]*phi.wild.telemetry[28,phase[tt]]*phi.wild.telemetry[29,phase[tt]]*phi.wild.telemetry[30,phase[tt]]*phi.wild.telemetry[31,phase[tt]]*phi.wild.telemetry[32,phase[tt]]*phi.wild.telemetry[33,phase[tt]]*phi.wild.telemetry[34,phase[tt]]*phi.wild.telemetry[35,phase[tt]]*phi.wild.telemetry[36,phase[tt]]					### multiply monthly survival from age 25-36
-    
-    ann.phi.capt.rel.first.year[tt]<-prod(phi.capt.telemetry[8:24,LIF]) ##*phi.capt.telemetry[9,phase[tt]]*phi.capt.telemetry[10,phase[tt]]*phi.capt.telemetry[11,phase[tt]]*phi.capt.telemetry[12,phase[tt]]*phi.capt.telemetry[13,phase[tt]]*phi.capt.telemetry[14,phase[tt]]*phi.capt.telemetry[15,phase[tt]]*phi.capt.telemetry[16,phase[tt]]*phi.capt.telemetry[17,phase[tt]]*phi.capt.telemetry[18,phase[tt]]*phi.capt.telemetry[19,phase[tt]]*phi.capt.telemetry[20,phase[tt]]*phi.capt.telemetry[21,phase[tt]]*phi.capt.telemetry[22,phase[tt]]*phi.capt.telemetry[23,phase[tt]]*phi.capt.telemetry[24,phase[tt]]					### first year for delayed-release bird is longer, from month 8 to 24 
+    ann.phi.juv.telemetry[LIF]<-prod(phi.wild.telemetry[1:12,LIF])
+    ann.phi.sec.telemetry[LIF]<-prod(phi.wild.telemetry[13:24,LIF])
+    ann.phi.third.telemetry[LIF]<-prod(phi.wild.telemetry[25:36,LIF]) ##*phi.wild.telemetry[26,phase[tt]]*phi.wild.telemetry[27,phase[tt]]*phi.wild.telemetry[28,phase[tt]]*phi.wild.telemetry[29,phase[tt]]*phi.wild.telemetry[30,phase[tt]]*phi.wild.telemetry[31,phase[tt]]*phi.wild.telemetry[32,phase[tt]]*phi.wild.telemetry[33,phase[tt]]*phi.wild.telemetry[34,phase[tt]]*phi.wild.telemetry[35,phase[tt]]*phi.wild.telemetry[36,phase[tt]]					### multiply monthly survival from age 25-36
+    ann.phi.capt.rel.first.year[LIF]<-prod(phi.capt.telemetry[8:24,LIF]) ##*phi.capt.telemetry[9,phase[tt]]*phi.capt.telemetry[10,phase[tt]]*phi.capt.telemetry[11,phase[tt]]*phi.capt.telemetry[12,phase[tt]]*phi.capt.telemetry[13,phase[tt]]*phi.capt.telemetry[14,phase[tt]]*phi.capt.telemetry[15,phase[tt]]*phi.capt.telemetry[16,phase[tt]]*phi.capt.telemetry[17,phase[tt]]*phi.capt.telemetry[18,phase[tt]]*phi.capt.telemetry[19,phase[tt]]*phi.capt.telemetry[20,phase[tt]]*phi.capt.telemetry[21,phase[tt]]*phi.capt.telemetry[22,phase[tt]]*phi.capt.telemetry[23,phase[tt]]*phi.capt.telemetry[24,phase[tt]]					### first year for delayed-release bird is longer, from month 8 to 24 
     
   } ### end loop over LIFE-specific survival
     
