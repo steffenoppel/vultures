@@ -1,0 +1,133 @@
+
+  model {
+
+    #-------------------------------------------------  
+    # 1. PRIORS FOR ALL DATA SETS
+    #-------------------------------------------------
+    
+        # Priors and constraints
+    
+    N.est.count[1,1] ~ dunif(20,40)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,2] ~ dunif(60,100)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,3] ~ dunif(30,60)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    N.est.count[1,4] ~ dunif(40,70)   ## draw random value from a uniform distribution between 50 and 200 for initial population size 
+    
+  for (t in 1:2) {   ###allow two separate time trends
+    mean.lambda.count[t] ~ dunif(0.1,2)	#Prior for mean growth rate
+    sigma.proc.count[t]  ~ dunif(0.1,10)	#Prior for SD of state process (annual variation in pop size)
+    sigma2.proc.count[t] <-pow(sigma.proc.count[t] ,2)
+    tau.proc.count[t] <-pow(sigma.proc.count[t] ,-2)
+  }
+    
+    # Priors and constraints FOR POPULATION COUNTS OBSERVATION
+    for (s in 1:countries){			### start loop over every country
+      sigma.obs.count[s] ~ dunif(0.1,100)	#Prior for SD of observation process (variation in detectability)
+      tau.obs.count[s]<-pow(sigma.obs.count[s],-2)
+    }
+    
+    
+    
+    ##### Likelihood function
+    
+    ## State process for entire time series
+    
+    for (t in 1:(T.count-1)){
+      for (s in 1:countries){			### start loop over every country
+        lambda.count[t,s] ~ dnorm(mean.lambda.count[period[t]], tau.proc.count[period[t]])								# Distribution for random error of growth rate
+        N.est.count[t+1,s]<-N.est.count[t,s]*lambda.count[t,s]										# Linear predictor (population size based on past pop size and change rate)
+      }
+    }
+    ## Observation process
+    for (t in 1:T.count){
+      for (s in 1:countries){			### start loop over every country
+        y.count[t,s] ~ dnorm(N.est.count[t,s], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
+      }
+    }
+
+
+    ##### Derived quantity
+    for (t in 1:T.count){
+      Ntot[t]<-sum(N.est.count[t,])
+    }
+    
+    
+  # Assessing the fit of the state-space model
+  # 1. Compute fit statistic for observed data
+  # Discrepancy measure: mean absolute error
+  for (t in 1:T.count){
+    C.exp[t] <- Ntot[t]                            # Expected counts
+    C.act[t] <- sum(y.count[t,])
+    Dssm.obs[t] <- abs((C.act[t] - C.exp[t]) / C.act[t])           # Discrepancy measure
+  }
+  Dmape.obs <- sum(Dssm.obs)
+
+  # 2. Compute fit statistic for replicate data
+  # Discrepancy measure: mean absolute error
+  for (t in 1:T.count){
+        for (s in 1:countries){			### start loop over every country
+         C.rep.c[t,s] ~ dnorm(N.est.count[t,s], tau.obs.count[s])								# Distribution for random error in observed numbers (counts)
+      }
+    C.rep[t] <- sum(C.rep.c[t,])                 # Generate replicate data
+    Dssm.rep[t] <- abs((C.rep[t] - C.exp[t]) / C.rep[t])   # Discrepancy measure
+  }
+  Dmape.rep <- sum(Dssm.rep)
+    
+    # -------------------------------------------------        
+    # 2. specify parameters for projection
+    # -------------------------------------------------
+    
+    phi.ad ~ dbeta(ad.phi.mean,ad.phi.sd)
+    phi.juv ~ dbeta(juv.phi.mean,juv.phi.sd)
+    phi.capt.juv ~ dbeta(sec.capt.phi.mean,sec.capt.phi.sd)
+    phi.sec ~ dbeta(sec.phi.mean,sec.phi.sd)
+    phi.third ~ dbeta(third.phi.mean,third.phi.sd)
+    mean.fec ~ dunif(0.914,1.109)
+    
+              
+    # -------------------------------------------------        
+    # 3. PREDICTION INTO THE FUTURE
+    # -------------------------------------------------
+
+
+        ## POPULATION PROCESS
+        ## need to set up population structure
+        nestlings.f[1] <- round(Nterr.f[1]*mean.fec * 0.5)   ##JUV[T.count]
+        N1.f[1] ~ dbin((mean.fec * 0.5*phi.juv),round(Ntot[T.count-1]))
+        N2.f[1] ~ dbin((mean.fec * 0.5*phi.juv*phi.sec),round(Ntot[T.count-2]))
+        N3.f[1] ~ dbin((mean.fec * 0.5*phi.juv*phi.sec*phi.third),round(Ntot[T.count-3]))
+        N4.f[1] ~ dbin((mean.fec * 0.5*phi.juv*phi.sec*phi.third*phi.ad),round(Ntot[T.count-4]))
+        N5.f[1] ~ dbin((mean.fec * 0.5*phi.juv*phi.sec*phi.third*phi.ad*phi.ad),max(1,round(Ntot[T.count-5])))
+        # N6.f[1] ~ dbin(phi.ad,round(Ntot[T.count]*0.44+(mean.fec * 0.5*phi.juv*phi.sec*phi.third*phi.ad*phi.ad*phi.ad*Ntot[T.count-6])))                                  ### number of 6-year or older (adult) birds
+        # Nterr.f[1] <- round((N4.f[1] * 0.024) + (N5.f[1] * 0.124) + (N6.f[1]))
+        N6.f[1] <- round(Nterr.f[1]-(N4.f[1] * 0.024) - (N5.f[1] * 0.124))
+        Nterr.f[1] <- Ntot[T.count]
+        N2wild.f[1] <- 0
+        N2released.f[1] <- 0
+        
+        for (fut in 2:PROJECTION){
+          
+          ### probabilistic formulation
+          nestlings.f[fut] <- (mean.fec * 0.5 * Nterr.f[fut])           ### number of local recruits calculated as REDUCED fecundity times number of territorial pairs
+          N1.f[fut] ~ dbin(phi.juv,round(nestlings.f[fut-1]))             ### +rescued[fut] number of 1-year old survivors
+          N2wild.f[fut] ~ dbin(phi.sec,max(1,round(N1.f[fut-1])))                ### number of 2-year old wild survivors
+          N2released.f[fut] ~ dbin(phi.capt.juv,round(capt.release[fut]))             ### +rescued[fut] number of 1-year old survivors 
+          N2.f[fut] <-  N2wild.f[fut] + N2released.f[fut]       ### sum of the N1 cohort derived from wild and captive-bred juveniles 
+          N3.f[fut] ~ dbin(phi.third,max(1,round(N2.f[fut-1])))                                                    ### number of 3-year old survivors
+          N4.f[fut] ~ dbin(phi.ad,max(1,round(N3.f[fut-1])))                                                       ### number of 4-year old survivors
+          N5.f[fut] ~ dbin(phi.ad,max(1,round(N4.f[fut-1])))                                                       ### number of 5-year old survivors
+          N6.f[fut] ~ dbin(phi.ad,max(1,round((N5.f[fut-1]+N6.f[fut-1]))))                                   ### number of 6-year or older (adult) birds
+          Nterr.f[fut] <- round((N4.f[fut] * 0.024) + (N5.f[fut] * 0.124) + (N6.f[fut]))
+          
+        } # fut
+        
+        for (fut2 in 1:(PROJECTION-1)){
+          lambda.t.f[fut2] <- Nterr.f[fut2+1] / max(Nterr.f[fut2],1)
+          loglambda.t.f[fut2]<-log(lambda.t.f[fut2])## for calculating geometric mean of overall population growth rate
+        } # fut2
+        
+        
+        #### FUTURE POPULATION GROWTH RATE  #########
+        fut.lambda<-exp((1/(PROJECTION-1))*sum(loglambda.t.f[1:(PROJECTION-1)]))   # Geometric mean
+      
+  } # END of the JAGS model
+    

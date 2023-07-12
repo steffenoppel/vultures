@@ -24,6 +24,8 @@
 ## REVISED 22 JUNE 2023 to include GoF test
 ## check utility of this: https://cran.r-project.org/web/packages/ggmcmc/vignettes/using_ggmcmc.html
 
+## MAJOR REVISIONS ON 11 JULY TO MODIFY ANNUAL SURVIVAL ESTIMATES
+## these depend on the value for longitude that is specified
 
 library(jagsUI)
 library(runjags)
@@ -34,7 +36,7 @@ library(tidyverse)
 library(geosphere)
 filter<-dplyr::filter
 select<-dplyr::select
-
+library(MCMCvis)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD DATA FROM DATABASE
@@ -327,7 +329,7 @@ INPUT.telemetry <- list(y = y.telemetry,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Parameters monitored
-parameters.telemetry <- c("base.obs","base.fail","base.recover","mean.phi","lp.mean","b.phi.age","b.phi.capt","b.phi.mig","b.phi.LIFE","b.phi.long","rep.states")
+parameters.telemetry <- c("base.obs","base.fail","base.recover","mean.phi","lp.mean","b.phi.age","b.phi.capt","b.phi.mig","b.phi.LIFE","b.phi.long")
 
 # Initial values for some parameters
 inits.telemetry <- function(){list(z = z.telemetry,
@@ -337,20 +339,21 @@ inits.telemetry <- function(){list(z = z.telemetry,
 						                      base.recover = rnorm(1,0, 0.001))} 
 
 # MCMC settings
-ni <- 5000
+ni <- 500
 nt <- 4
-nb <- 2000
+nb <- 200
 nc <- 3
-nad<-1000
-ns<-10000  	## number of iterations (draws per chain)
+nad<-100
+ns<-1000  	## number of iterations (draws per chain)
 
 
 
 ### MIGRATION ONLY MODELS WITH NO GEOGRAPHIC STRUCTURE ############################
 # Call JAGS from R (took 4 hrs on PC, DIC = 1817.493)
-# EGVU_juv_surv <- autojags(INPUT.telemetry, inits.telemetry, parameters.telemetry,
-#                                         "C:\\STEFFEN\\OneDrive - THE ROYAL SOCIETY FOR THE PROTECTION OF BIRDS\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\EGVU_telemetry_juv_survival_LIFE.jags",
-#                                         n.chains = nc, n.thin = nt, n.burnin = nb, n.cores=nc, parallel=T) #, n.iter = ni)
+EGVU_juv_surv <- autojags(INPUT.telemetry, inits.telemetry, parameters.telemetry,
+                                         #"C:\\STEFFEN\\OneDrive - THE ROYAL SOCIETY FOR THE PROTECTION OF BIRDS\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival\\EGVU_telemetry_juv_survival_LIFE.jags",
+                                         "C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/Analysis/EGVU_telemetry_juv_survival_LIFE_long.jags",
+                                         n.chains = nc, n.thin = nt, n.burnin = nb, n.cores=nc, parallel=T) #, n.iter = ni)
 try(setwd("C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/Analysis"), silent=T)
 EGVU_juv_surv <- run.jags(data=INPUT.telemetry,
                        inits=inits.telemetry,
@@ -375,8 +378,9 @@ load("EGVU_LIFE_telemetry_survival_output_2023.RData")
 ### compare frequency of states from simulated prediction to frequency in observed data
 
 OBS<-table(as.factor(y.telemetry))
-REP<-table(as.factor(MCMCpstr(EGVU_juv_surv, params=c("rep.states"), type="chains")))
-chisq.test(OBS,REP)
+REPraw<-MCMCpstr(EGVU_juv_surv$mcmc, params=c("rep.states"), type="chains")
+REP<-table(as.factor(as.numeric(REPraw$rep.states)))
+chisq.test(OBS,REP)  ### should have a p-value >> 0.05 otherwise there would be disconcerting lack of fit
 
 
 
@@ -384,9 +388,13 @@ chisq.test(OBS,REP)
 ############ PRODUCE PARMETER ESTIMATE PLOT  #############################
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-out<-as.data.frame(EGVU_juv_surv$summary[[1]]) %>% bind_cols(as.data.frame(EGVU_juv_surv$summary[[2]]))
-out$parameter<-row.names(EGVU_juv_surv$summary[[1]])
-names(out)[c(5,7,9)]<-c('lcl','median', 'ucl')
+out<-as.data.frame(EGVU_juv_surv$summary) #%>% bind_cols(as.data.frame(EGVU_juv_surv$summary[[2]]))
+out$parameter<-row.names(EGVU_juv_surv$summary)
+#out<-as.data.frame(summary(EGVU_juv_surv))
+#out$parameter<-row.names(summary(EGVU_juv_surv))
+
+#names(out)[c(3,5,7)]<-c('lcl','median', 'ucl')
+names(out)[c(1,2,3)]<-c('lcl','median', 'ucl')
 out<-out %>%  select(parameter,Mean, median, lcl, ucl)
 
 fwrite(out,"EGVU_LIFE_telemetry_surv_parm_est.csv")
@@ -437,22 +445,22 @@ longscale<-scale(birds$Tag_long)
 MCMCout<-rbind(EGVU_juv_surv$mcmc[[1]],EGVU_juv_surv$mcmc[[2]],EGVU_juv_surv$mcmc[[3]])
 # str(MCMCout)
 
-### SET UP ANNUAL TABLE
+### SET UP ANNUAL TABLE FOR PLOTTING THE MONTHLY SURVIVAL GRAPH
+## does not include migration
 
-AnnTab<-expand.grid(capt=0,age=seq(1,12), LIFE=c(0,1), long = 25.5)
+AnnTab<-expand.grid(capt=0,age=seq(1,36), LIFE=c(0,1), long = 25.5)
 AnnTab<-expand.grid(capt=1,age=seq(9,23), LIFE=c(0,1), long = 25.5) %>%     ## for delayed release juveniles
   bind_rows(AnnTab) %>%
-  #mutate(mig=ifelse(capt==0,ifelse(age==4,1,0),ifelse(age==12,1,0))) %>% ### causes weird graph
   mutate(mig=0) %>% ### to ensure there is not a weird notch in the graph
-  #mutate(scaleage=agescale[age]) %>%
+  mutate(juv=ifelse(capt==0,ifelse(age <13,1,0),
+                    ifelse(age <18,1,0))) %>% 
   mutate(scaleage=(age-attr(agescale, 'scaled:center'))/attr(agescale, 'scaled:scale')) %>%
-  mutate(scalelong=(long-attr(longscale, 'scaled:center'))/attr(longscale, 'scaled:scale'))
+  mutate(scalelong=(long-attr(longscale, 'scaled:center'))/attr(longscale, 'scaled:scale'))%>%
+  mutate(AgeGroup=ifelse(age>24,"third",ifelse(age<13 & capt==0,"juv","second")))
 
 Xin<-AnnTab
 
 ### CALCULATE PREDICTED VALUE FOR EACH SAMPLE
-# takes too long, hence reduced to use summary output instead
-# but using summary values of parameters creates weird confidence intervals for before LIFE period
 
 MCMCpred<-data.frame()
 for(s in 1:nrow(MCMCout)) {
@@ -465,7 +473,7 @@ for(s in 1:nrow(MCMCout)) {
              as.numeric(MCMCout[s,match("b.phi.mig",parmcols)])*mig +
              as.numeric(MCMCout[s,match("b.phi.LIFE",parmcols)])*LIFE +
              as.numeric(MCMCout[s,match("b.phi.capt",parmcols)])*capt +
-             as.numeric(MCMCout[s,match("b.phi.long",parmcols)])*scalelong) %>%
+             as.numeric(MCMCout[s,match("b.phi.long",parmcols)])*scalelong*juv) %>%
     
     ##BACKTRANSFORM TO NORMAL SCALE
     mutate(surv=plogis(logit.surv)) %>%
@@ -473,77 +481,12 @@ for(s in 1:nrow(MCMCout)) {
     ##CALCULATE ANNUAL SURVIVAL
     mutate(Origin=ifelse(capt==0,"wild","captive-reared")) %>%
     mutate(LIFE=ifelse(LIFE==0,"before LIFE","with LIFE")) %>%
-    #group_by(Origin,LIFE) %>%
-    #summarise(ann.surv=prod(surv)) %>%
     mutate(simul=s)              
   
   
   MCMCpred<-rbind(MCMCpred,as.data.frame(X)) 
   
 }
-
-
-### THIS IS INVALID
-## advised by Adam Butler on 9 March 2023
-## The difficulty with that is that the LCL of a sum is, in general, not equal to the sum of LCLs.
-## As a simple example, if we have two parameters, A and B, then the LCL of (A + B) won't be equal to the LCL of A plus the LCL of B (and similarly for the UCL). 
-# MonthSurv<-AnnTab %>%
-# 
-#     ### CALCULATE MONTHLY SURVIVAL
-#     mutate(logit.surv=as.numeric(out[5,2])+
-#              as.numeric(out[6,2])*scaleage +
-#              as.numeric(out[8,2])*mig +
-#              as.numeric(out[9,2])*LIFE +
-#              as.numeric(out[7,2])*capt +
-#              as.numeric(out[10,2])*long*mig) %>%
-#     mutate(logit.surv.lcl=as.numeric(out[5,4])+
-#            as.numeric(out[6,4])*scaleage +
-#            as.numeric(out[8,4])*mig +
-#            as.numeric(out[9,4])*LIFE +
-#            as.numeric(out[10,4])*capt +
-#              as.numeric(out[7,2])*long*mig) %>%
-#     mutate(logit.surv.ucl=as.numeric(out[5,5])+
-#            as.numeric(out[6,5])*scaleage +
-#            as.numeric(out[8,5])*mig +
-#            as.numeric(out[9,5])*LIFE +
-#            as.numeric(out[7,5])*capt +
-#           as.numeric(out[10,2])*long*mig) %>%
-# 
-#     ### BACKTRANSFORM TO NORMAL SCALE
-#     mutate(surv=plogis(logit.surv),surv.lcl=plogis(logit.surv.lcl),surv.ucl=plogis(logit.surv.ucl)) %>%
-# 
-#     ### CALCULATE ANNUAL SURVIVAL
-#     mutate(Origin=ifelse(capt==0,"wild","captive-reared")) %>%
-#     mutate(LIFE=ifelse(LIFE==0,"before LIFE","with LIFE"))
-# 
-# 
-# 
-# ### FOR SOME REASON THE CIs are reversed
-# MonthSurv<-MonthSurv %>%
-#   mutate(real.ucl=ifelse(surv.lcl>surv.ucl,surv.lcl,surv.ucl)) %>%
-#   mutate(real.lcl=ifelse(surv.lcl>surv.ucl,surv.ucl,surv.lcl)) %>%
-#   mutate(surv.ucl=real.ucl,surv.lcl=real.lcl)
-
-
-### CALCULATE PREDICTED SURVIVAL BASED ON FINAL MODEL
-
- TABLE2<-  MCMCpred %>% 
-   
-   ### CALCULATE ANNUAL SURVIVAL
-   group_by(Origin,LIFE,simul) %>%
-   summarise(ann.surv=prod(surv)) %>%
-   ungroup() %>%
-   
-   ### CALCULATE CREDIBLE INTERVALS
-   group_by(LIFE,Origin) %>%
-   summarise(med.surv=quantile(ann.surv,0.5),lcl.surv=quantile(ann.surv,0.025),ucl.surv=quantile(ann.surv,0.975)) %>%
-  arrange(LIFE,Origin)
-
-TABLE2
-fwrite(TABLE2,"LIFE_EGVU_juvenile_surv_estimates.csv")
-
-
-
 
 ### CREATE PLOT
 
@@ -554,19 +497,15 @@ MCMCpred %>%   rename(raw.surv=surv) %>%
 	filter(Origin=="wild") %>% ##filter(LIFE=="before LIFE")
   ggplot()+
   geom_ribbon(aes(x=age, ymin=surv.lcl, ymax=surv.ucl, fill=LIFE), alpha=0.2) +   ##, type=Origin
-  geom_line(aes(x=age, y=surv, color=LIFE),size=2)+     ## , linetype=Origin
-  #facet_wrap(~Origin, ncol=2, scales="free_y") +
-  
-  
+  geom_line(aes(x=age, y=surv, color=LIFE),linewidth=2)+     ## , linetype=Origin
+
   ## format axis ticks
   scale_x_continuous(name="Age in months", limits=c(1,12), breaks=seq(1,12,1), labels=seq(1,12,1)) +
   #scale_y_continuous(name="Monthly survival probability", limits=c(0.8,1), breaks=seq(0.,1,0.05)) +
   labs(y="Monthly survival probability",fill="Period", colour="Period") +
   scale_fill_viridis_d(alpha=0.3,begin=0,end=0.98,direction=1) +
   scale_color_viridis_d(alpha=1,begin=0,end=0.98,direction=1) +
-  #scale_fill_viridis_d(begin = .4, direction = -1) +
-  #scale_color_viridis_d(begin = .4, direction = -1) +
-  
+
   ## beautification of the axes
   theme(panel.background=element_rect(fill="white", colour="black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         axis.text.y=element_text(size=14, color="black"),
@@ -583,14 +522,92 @@ ggsave("C:\\STEFFEN\\OneDrive - THE ROYAL SOCIETY FOR THE PROTECTION OF BIRDS\\S
 
 
 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# CALCULATE ANNUAL SURVIVAL FOR PVA PROJECTIONS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+### SET UP ANNUAL TABLE FOR ESTIMATING ANNUAL SURVIVAL
+### includes migration cost
+
+AnnTab<-expand.grid(capt=0,age=seq(1,36), LIFE=c(0,1), long = 25.5)
+AnnTab<-expand.grid(capt=1,age=seq(9,23), LIFE=c(0,1), long = 25.5) %>%     ## for delayed release juveniles
+  bind_rows(AnnTab) %>%
+  # mutate(mig=ifelse(capt==0,ifelse(age %in% c(4,21,27,32),1,0),
+  #                   ifelse(age %in% c(12,21),1,0))) %>%
+  mutate(mig=ifelse(capt==0,ifelse(age %in% c(3,4,
+                                              20,21,22,26,27,28,32,33,34),1,0),
+                    ifelse(age %in% c(14,15,16,20,21,22),1,0))) %>% 
+  mutate(juv=ifelse(capt==0,ifelse(age <13,1,0),
+                    ifelse(age <18,1,0))) %>% 
+  mutate(scaleage=(age-attr(agescale, 'scaled:center'))/attr(agescale, 'scaled:scale')) %>%
+  mutate(scalelong=(long-attr(longscale, 'scaled:center'))/attr(longscale, 'scaled:scale'))%>%
+  mutate(AgeGroup=ifelse(age>24,"third",ifelse(age<13 & capt==0,"juv","second")))
+
+Xin<-AnnTab
+
+### CALCULATE PREDICTED VALUE FOR EACH SAMPLE
+# takes too long, hence reduced to use summary output instead
+# but using summary values of parameters creates weird confidence intervals for before LIFE period
+
+MCMCpred<-data.frame()
+for(s in 1:nrow(MCMCout)) {
+  
+  X<-  Xin %>%
+    
+    ##CALCULATE MONTHLY SURVIVAL
+    mutate(logit.surv=as.numeric(MCMCout[s,match("lp.mean",parmcols)])+
+             as.numeric(MCMCout[s,match("b.phi.age",parmcols)])*scaleage +
+             as.numeric(MCMCout[s,match("b.phi.mig",parmcols)])*mig +
+             as.numeric(MCMCout[s,match("b.phi.LIFE",parmcols)])*LIFE +
+             as.numeric(MCMCout[s,match("b.phi.capt",parmcols)])*capt +
+             as.numeric(MCMCout[s,match("b.phi.long",parmcols)])*scalelong*juv) %>%
+    
+    ##BACKTRANSFORM TO NORMAL SCALE
+    mutate(surv=plogis(logit.surv)) %>%
+    
+    ##CALCULATE ANNUAL SURVIVAL
+    mutate(Origin=ifelse(capt==0,"wild","captive-reared")) %>%
+    mutate(LIFE=ifelse(LIFE==0,"before LIFE","with LIFE")) %>%
+    mutate(simul=s)              
+  
+  
+  MCMCpred<-rbind(MCMCpred,as.data.frame(X)) 
+  
+}
+
+
+### CALCULATE PREDICTED SURVIVAL BASED ON FINAL MODEL
+
+surv.parm<-  MCMCpred %>% 
+  
+  ### CALCULATE ANNUAL SURVIVAL
+  group_by(Origin,LIFE,simul,AgeGroup) %>%
+  summarise(ann.surv=prod(surv)) %>%
+  ungroup() %>%
+  
+  ### CALCULATE CREDIBLE INTERVALS
+  group_by(LIFE,Origin,AgeGroup) %>%
+  summarise(mean.surv=mean(ann.surv),sd=sd(ann.surv),med.surv=quantile(ann.surv,0.5),lcl.surv=quantile(ann.surv,0.025),ucl.surv=quantile(ann.surv,0.975)) %>%
+  arrange(LIFE,Origin)
+
+surv.parm
+fwrite(surv.parm,"LIFE_EGVU_juvenile_surv_estimates.csv")
+
+
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # CALCULATE PROPORTIONAL INCREASE IN SUVIVAL FOR FINAL REPORT
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-MCMCpred %>% group_by(LIFE,Origin) %>%
+MCMCpred %>% group_by(LIFE,AgeGroup,Origin) %>%
   summarise(med.surv=quantile(surv,0.5)) %>%
   spread(key=LIFE, value=med.surv) %>%
   mutate(prop.increase=((`with LIFE`-`before LIFE`)/`before LIFE`) *100)
+
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -599,8 +616,13 @@ MCMCpred %>% group_by(LIFE,Origin) %>%
 #setwd("C:\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival")
 try(setwd("C:\\Users\\steffenoppel\\OneDrive - THE ROYAL SOCIETY FOR THE PROTECTION OF BIRDS\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
 try(setwd("C:\\STEFFEN\\OneDrive - THE ROYAL SOCIETY FOR THE PROTECTION OF BIRDS\\STEFFEN\\RSPB\\Bulgaria\\Analysis\\Survival"), silent=T)
+try(setwd("C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/Analysis"), silent=T)
 save.image("EGVU_LIFE_telemetry_survival_output_2023.RData")
 #load("EGVU_LIFE_telemetry_survival_output_2023.RData")
+
+
+
+
 
 
 

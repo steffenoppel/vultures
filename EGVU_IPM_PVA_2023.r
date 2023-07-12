@@ -22,7 +22,7 @@ library(lubridate)
 library(janitor)
 filter<-dplyr::filter
 select<-dplyr::select
-
+library(MCMCvis)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD AND MANIPULATE POPULATION MONITORING DATA
@@ -338,9 +338,34 @@ failed.jags(c('model'))
 
 out<-as.data.frame(summary(EGVU_PVA))
 out$parameter<-rownames(summary(EGVU_PVA))
-fwrite(out,"EGVU_IPM_estimates.csv")
+fwrite(out,"C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/output/EGVU_IPM_estimates.csv")
 
 MCMCsummary(EGVU_PVA$mcmc)
+MCMCdiag(EGVU_PVA$mcmc,
+         round = 3,
+         file_name = 'EGVU_IPM_7Jul2023',
+         dir = 'C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/output',
+         mkdir = 'IPM-7Jul2023',
+         add_field = '1.0',
+         add_field_names = 'Data version',
+         save_obj = TRUE,
+         obj_name = 'ipm-fit-7Jul2023',
+         add_obj = list(INPUT, sessionInfo()),
+         add_obj_names = c('ipm-data-7Jul2023', 'session-info-7Jul2023'))
+MCMCdiag(EGVU_PVA$mcmc,
+         round = 3,
+         file_name = 'EGVU_IPM_7Jul2023',
+         dir = 'C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/output',
+         mkdir = 'IPM-7Jul2023',
+         add_field = '1.0',
+         add_field_names = 'Data version',
+         save_obj = TRUE,
+         obj_name = 'ipm-fit-7Jul2023',
+         add_obj = list(INPUT, sessionInfo()),
+         add_obj_names = c('ipm-data-7Jul2023', 'session-info-7Jul2023'))
+try(setwd("C:/Users/sop/Documents/Steffen/RSPB/EGVU/EGVU_LIFE/output"), silent=T)
+save.image("EGVU_LIFE_IPM_output_2023.RData")
+
 
 
 
@@ -369,8 +394,8 @@ mean(GOF$P)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## USING THE CALCULATED FIT VALUES FROM THE JAGS MODEL
-OBS <- MCMCpstr(EGVU_PVA, params=c("fit.terr"), type="chains")
-REP <- MCMCpstr(EGVU_PVA, params=c("fit.rep.terr"), type="chains")
+OBS <- MCMCpstr(EGVU_PVA$mcmc, params=c("fit.terr"), type="chains")
+REP <- MCMCpstr(EGVU_PVA$mcmc, params=c("fit.rep.terr"), type="chains")
 GOF<-tibble(Rep=as.numeric(REP[[1]]),Obs=as.numeric(OBS[[1]])) %>%
   mutate(P=ifelse(Obs>Rep,1,0))
 
@@ -479,7 +504,7 @@ ggplot()+
   geom_point(data=EV.count,aes(x=year, y=TOT), size=2,col='darkblue')+
 
   ## format axis ticks
-  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,220),breaks=seq(0,210,30), labels=as.character(seq(0,210,30)))+
+  scale_y_continuous(name="N territorial Egyptian Vultures", limits=c(0,2200),breaks=seq(0,2100,300), labels=as.character(seq(0,210,30)))+
   scale_x_continuous(name="Year", breaks=seq(2005,2050,5), labels=as.character(seq(2005,2050,5)))+
 
   ## beautification of the axes
